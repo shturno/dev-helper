@@ -1,0 +1,111 @@
+{
+    "name": "TDAH High Contrast",
+    "type": "dark",
+    "colors": {
+        "editor.background": "#000000",
+        "editor.foreground": "#FFFFFF",
+        "activityBar.background": "#000000",
+        "activityBar.foreground": "#FFFFFF",
+        "statusBar.background": "#000000",
+        "statusBar.foreground": "#FFFFFF",
+        "titleBar.activeBackground": "#000000",
+        "titleBar.activeForeground": "#FFFFFF",
+        "sideBar.background": "#000000",
+        "sideBar.foreground": "#FFFFFF",
+        "focusBorder": "#00FF00",
+        "editor.selectionBackground": "#00FF0033",
+        "editor.selectionForeground": "#FFFFFF",
+        "editor.lineHighlightBackground": "#1A1A1A",
+        "editor.lineHighlightBorder": "#00FF00",
+        "editorCursor.foreground": "#00FF00",
+        "editor.wordHighlightBackground": "#00FF0022",
+        "editor.wordHighlightBorder": "#00FF0044",
+        "editor.findMatchBackground": "#FFFF0033",
+        "editor.findMatchBorder": "#FFFF0066",
+        "editor.findRangeHighlightBackground": "#FFFF0022",
+        "editor.findRangeHighlightBorder": "#FFFF0044",
+        "editor.inactiveSelectionBackground": "#00FF0022",
+        "editor.inactiveSelectionForeground": "#FFFFFF",
+        "minimap.background": "#000000",
+        "minimap.selectionHighlight": "#00FF0033",
+        "minimap.findMatchHighlight": "#FFFF0033",
+        "minimap.errorHighlight": "#FF000033",
+        "minimap.warningHighlight": "#FFFF0033",
+        "minimapGutter.addedBackground": "#00FF0033",
+        "minimapGutter.modifiedBackground": "#FFFF0033",
+        "minimapGutter.deletedBackground": "#FF000033",
+        "editorGroupHeader.background": "#000000",
+        "editorGroupHeader.foreground": "#FFFFFF",
+        "editorGroupHeader.tabsBackground": "#000000",
+        "editorGroupHeader.tabsForeground": "#FFFFFF",
+        "editorGroupHeader.tabsBorder": "#00FF00",
+        "editorGroupHeader.tabsActiveBackground": "#1A1A1A",
+        "editorGroupHeader.tabsActiveForeground": "#FFFFFF",
+        "editorGroupHeader.tabsActiveBorder": "#00FF00",
+        "editorGroupHeader.tabsInactiveBackground": "#000000",
+        "editorGroupHeader.tabsInactiveForeground": "#FFFFFF",
+        "editorGroupHeader.tabsInactiveBorder": "#00FF00",
+        "editorGroupHeader.tabsHoverBackground": "#1A1A1A",
+        "editorGroupHeader.tabsHoverForeground": "#FFFFFF",
+        "editorGroupHeader.tabsHoverBorder": "#00FF00",
+        "editorGroupHeader.tabsUnfocusedBackground": "#000000",
+        "editorGroupHeader.tabsUnfocusedForeground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedBorder": "#00FF00",
+        "editorGroupHeader.tabsUnfocusedActiveBackground": "#1A1A1A",
+        "editorGroupHeader.tabsUnfocusedActiveForeground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedActiveBorder": "#00FF00",
+        "editorGroupHeader.tabsUnfocusedInactiveBackground": "#000000",
+        "editorGroupHeader.tabsUnfocusedInactiveForeground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedInactiveBorder": "#00FF00",
+        "editorGroupHeader.tabsUnfocusedHoverBackground": "#1A1A1A",
+        "editorGroupHeader.tabsUnfocusedHoverForeground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedHoverBorder": "#00FF00"
+    },
+    "tokenColors": [
+        {
+            "name": "Keywords",
+            "scope": ["keyword", "storage", "type"],
+            "settings": {
+                "foreground": "#00FF00",
+                "fontStyle": "bold"
+            }
+        },
+        {
+            "name": "Functions",
+            "scope": ["entity.name.function", "support.function"],
+            "settings": {
+                "foreground": "#00FFFF",
+                "fontStyle": "bold"
+            }
+        },
+        {
+            "name": "Strings",
+            "scope": ["string", "string.template"],
+            "settings": {
+                "foreground": "#FFFF00"
+            }
+        },
+        {
+            "name": "Comments",
+            "scope": ["comment", "punctuation.definition.comment"],
+            "settings": {
+                "foreground": "#808080",
+                "fontStyle": "italic"
+            }
+        },
+        {
+            "name": "Variables",
+            "scope": ["variable", "variable.other"],
+            "settings": {
+                "foreground": "#FFFFFF"
+            }
+        },
+        {
+            "name": "Numbers",
+            "scope": ["constant.numeric"],
+            "settings": {
+                "foreground": "#FF00FF"
+            }
+        }
+    ]
+} 

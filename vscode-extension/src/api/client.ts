@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 export interface Task {
     id: number;
@@ -40,99 +41,144 @@ export interface ProductivityData {
     };
 }
 
-export class ApiClient {
-    private baseUrl: string;
-    private token: string | null;
+export interface ApiConfig {
+    baseUrl: string;
+    timeout?: number;
+}
 
-    constructor(token: string | null = null) {
-        const config = vscode.workspace.getConfiguration('tdahDevHelper');
-        this.baseUrl = config.get('apiUrl', 'http://localhost:8000/api');
-        this.token = token;
+export class ApiClient {
+    private client: AxiosInstance;
+    private config: vscode.WorkspaceConfiguration;
+
+    constructor() {
+        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
+        const baseUrl = this.config.get<string>('apiUrl') || 'http://localhost:3000';
+        
+        this.client = axios.create({
+            baseURL: baseUrl,
+            timeout: 5000,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
     }
 
-    private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-        const url = `${this.baseUrl}${endpoint}`;
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
-            ...options.headers
-        };
-
+    private async request<T>(config: AxiosRequestConfig): Promise<T> {
         try {
-            const response = await fetch(url, { ...options, headers });
-            
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.statusText}`);
-            }
-
-            return response.json();
+            const response = await this.client.request<T>(config);
+            return response.data;
         } catch (error) {
-            console.error('API request error:', error);
+            if (axios.isAxiosError(error)) {
+                const message = error.response?.data?.message || error.message;
+                throw new Error(`API Error: ${message}`);
+            }
             throw error;
         }
     }
 
+    public async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+        return this.request<T>({
+            method: 'GET',
+            url: endpoint,
+            params
+        });
+    }
+
+    public async post<T>(endpoint: string, data?: any): Promise<T> {
+        return this.request<T>({
+            method: 'POST',
+            url: endpoint,
+            data
+        });
+    }
+
+    public async put<T>(endpoint: string, data?: any): Promise<T> {
+        return this.request<T>({
+            method: 'PUT',
+            url: endpoint,
+            data
+        });
+    }
+
+    public async delete<T>(endpoint: string): Promise<T> {
+        return this.request<T>({
+            method: 'DELETE',
+            url: endpoint
+        });
+    }
+
+    // Métodos específicos da API
+    public async getActiveTask(): Promise<any> {
+        return this.get('/tasks/active');
+    }
+
+    public async setActiveTask(taskId: number): Promise<any> {
+        return this.put('/tasks/active', { taskId });
+    }
+
+    public async createTask(task: any): Promise<any> {
+        return this.post('/tasks', task);
+    }
+
+    public async updateTask(id: string, task: any): Promise<any> {
+        return this.put(`/tasks/${id}`, task);
+    }
+
+    public async deleteTask(id: string): Promise<void> {
+        return this.delete(`/tasks/${id}`);
+    }
+
+    public async getTasks(): Promise<any[]> {
+        return this.get('/tasks');
+    }
+
+    public async getUserProfile(): Promise<any> {
+        return this.get('/user/profile');
+    }
+
+    public async updateUserProfile(profile: any): Promise<any> {
+        return this.put('/user/profile', profile);
+    }
+
     // Métodos de autenticação
     public async authenticate(): Promise<UserData> {
-        return this.request<UserData>('/auth/user');
+        return this.get<UserData>('/auth/user');
     }
 
     // Métodos de tarefas
     public async getUserTasks(): Promise<Task[]> {
-        return this.request<Task[]>('/tasks');
-    }
-
-    public async getActiveTask(): Promise<Task | null> {
-        return this.request<Task | null>('/vscode/user-tasks/active');
-    }
-
-    public async setActiveTask(taskId: number): Promise<void> {
-        return this.request<void>('/vscode/user-tasks/active', {
-            method: 'POST',
-            body: JSON.stringify({ task_id: taskId })
-        });
+        return this.get<Task[]>('/tasks');
     }
 
     public async getSubtasks(taskId: number): Promise<Subtask[]> {
-        return this.request<Subtask[]>(`/tasks/${taskId}/subtasks`);
+        return this.get<Subtask[]>(`/tasks/${taskId}/subtasks`);
     }
 
     public async decomposeTask(taskId: number): Promise<Subtask[]> {
-        return this.request<Subtask[]>(`/tasks/${taskId}/decompose`, {
-            method: 'POST'
-        });
+        return this.post<Subtask[]>(`/tasks/${taskId}/decompose`);
     }
 
     public async completeSubtask(subtaskId: number): Promise<{ xp_earned: number, all_completed: boolean }> {
-        return this.request<{ xp_earned: number, all_completed: boolean }>(
-            `/subtasks/${subtaskId}/complete`,
-            { method: 'PUT' }
-        );
+        return this.put<{ xp_earned: number, all_completed: boolean }>(`/subtasks/${subtaskId}/complete`);
     }
 
     // Métodos de produtividade
     public async getUserProductivityData(): Promise<ProductivityData> {
-        return this.request<ProductivityData>('/users/productivity/peak-hours');
+        return this.get<ProductivityData>('/users/productivity/peak-hours');
     }
 
     // Métodos de hiperfoco
     public async logFocusSession(data: { start_time: number, trigger: string, file_complexity?: number, file_name?: string }): Promise<void> {
-        return this.request<void>('/vscode/activity-log', {
-            method: 'POST',
-            body: JSON.stringify({
-                type: 'focus_session_start',
-                data
-            })
+        return this.post('/vscode/activity-log', {
+            type: 'focus_session_start',
+            data
         });
     }
 
     public async endFocusSession(data: { duration: number }): Promise<void> {
-        return this.request<void>('/vscode/activity-log', {
-            method: 'POST',
-            body: JSON.stringify({
-                type: 'focus_session_end',
-                data
-            })
+        return this.post('/vscode/activity-log', {
+            type: 'focus_session_end',
+            data
         });
     }
 } 

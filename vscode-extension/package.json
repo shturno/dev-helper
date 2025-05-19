@@ -1,63 +1,134 @@
 {
   "name": "tdah-dev-helper",
   "displayName": "TDAH Dev Helper",
-  "description": "Assistente de produtividade para desenvolvedores com TDAH",
-  "version": "0.1.0",
+  "description": "Extensão para ajudar desenvolvedores com TDAH a aumentar sua produtividade",
+  "version": "0.0.1",
+  "publisher": "tdah-dev-helper",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/tdah-dev-helper"
+  },
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Themes",
+    "Productivity"
   ],
+  "keywords": [
+    "tdah",
+    "adhd",
+    "productivity",
+    "focus",
+    "task-management",
+    "gamification",
+    "accessibility"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#3498DB",
+    "theme": "dark"
+  },
   "activationEvents": [
-    "onStartupFinished"
+    "onCommand:tdah-dev-helper.startFocus",
+    "onCommand:tdah-dev-helper.stopFocus",
+    "onCommand:tdah-dev-helper.showDashboard",
+    "onCommand:tdah-dev-helper.selectTask",
+    "onCommand:tdah-dev-helper.decomposeTask",
+    "onCommand:tdah-dev-helper.showBlockedNotifications",
+    "onCommand:tdah-dev-helper.showProfile",
+    "onCommand:tdah-dev-helper.changeTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "tdah-dev-helper.startFocus",
-        "title": "TDAH: Iniciar Modo Hiperfoco"
+        "title": "TDAH: Iniciar Modo Hiperfoco",
+        "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.stopFocus",
-        "title": "TDAH: Parar Modo Hiperfoco"
+        "title": "TDAH: Parar Modo Hiperfoco",
+        "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.showDashboard",
-        "title": "TDAH: Mostrar Dashboard"
+        "title": "TDAH: Mostrar Dashboard",
+        "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.selectTask",
-        "title": "TDAH: Selecionar Tarefa"
+        "title": "TDAH: Selecionar Tarefa",
+        "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.decomposeTask",
-        "title": "TDAH: Decompor Tarefa em Subtarefas"
+        "title": "TDAH: Decompor Tarefa",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.showBlockedNotifications",
+        "title": "TDAH: Mostrar Notificações Bloqueadas",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.showProfile",
+        "title": "TDAH: Mostrar Perfil",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.changeTheme",
+        "title": "TDAH: Mudar Tema",
+        "category": "TDAH Dev Helper"
+      }
+    ],
+    "themes": [
+      {
+        "id": "tdah-light",
+        "label": "TDAH Light",
+        "uiTheme": "vs",
+        "path": "./themes/tdah-light.json"
+      },
+      {
+        "id": "tdah-dark",
+        "label": "TDAH Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/tdah-dark.json"
+      },
+      {
+        "id": "tdah-high-contrast",
+        "label": "TDAH High Contrast",
+        "uiTheme": "hc-black",
+        "path": "./themes/tdah-high-contrast.json"
       }
     ],
     "configuration": {
       "title": "TDAH Dev Helper",
       "properties": {
+        "tdahDevHelper.theme": {
+          "type": "string",
+          "enum": ["tdah-light", "tdah-dark", "tdah-high-contrast"],
+          "default": "tdah-light",
+          "description": "Tema otimizado para desenvolvedores com TDAH"
+        },
         "tdahDevHelper.apiUrl": {
           "type": "string",
-          "default": "http://localhost:8000/api",
-          "description": "URL da API do backend"
+          "default": "http://localhost:3000",
+          "description": "URL da API do TDAH Dev Helper"
         },
-        "tdahDevHelper.hyperfocus.enabled": {
+        "tdahDevHelper.notificationBlocking": {
           "type": "boolean",
           "default": true,
-          "description": "Ativar modo hiperfoco automaticamente"
+          "description": "Ativar bloqueio de notificações durante o modo hiperfoco"
         },
-        "tdahDevHelper.hyperfocus.fileComplexityThreshold": {
-          "type": "number",
-          "default": 500,
-          "description": "Limite de complexidade de arquivo para ativar modo hiperfoco"
-        },
-        "tdahDevHelper.notifications.blockDuringFocus": {
+        "tdahDevHelper.gamification": {
           "type": "boolean",
           "default": true,
-          "description": "Bloquear notificações durante modo hiperfoco"
+          "description": "Ativar sistema de gamificação"
         }
       }
     }
@@ -67,22 +138,33 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "test-compile": "tsc -p ./",
-    "test-watch": "tsc -watch -p ./",
-    "pretest": "npm run test-compile && npm run lint",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "clean": "rimraf dist out",
+    "build": "npm run clean && npm run package",
+    "dev": "npm run clean && npm run watch"
   },
   "devDependencies": {
     "@types/vscode": "^1.60.0",
-    "@types/node": "14.x",
-    "@typescript-eslint/eslint-plugin": "^4.26.0",
-    "@typescript-eslint/parser": "^4.26.0",
-    "eslint": "^7.27.0",
-    "typescript": "^4.3.2",
-    "vscode-test": "^1.5.2",
-    "webpack": "^5.38.1",
-    "webpack-cli": "^4.7.0",
-    "ts-loader": "^9.2.2"
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.57.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.3.0",
+    "rimraf": "^5.0.5",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.7"
   }
 }

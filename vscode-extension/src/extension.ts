@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import { ApiClient } from 'api/client';
-import { ContextDetector } from 'context/detector';
-import { HyperfocusManager } from 'hyperfocus/manager';
-import { NotificationBlocker } from 'notifications/blocker';
-import { TaskTracker } from 'tasks/tracker';
-import { GamificationManager } from 'gamification/manager';
+import { ApiClient } from './api/client';
+import { ContextDetector } from './context/detector';
+import { HyperfocusManager } from './hyperfocus/manager';
+import { NotificationBlocker } from './notifications/blocker';
+import { TaskTracker } from './tasks/tracker';
+import { GamificationManager } from './gamification/manager';
+import { ThemeManager } from './themes/manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient;
@@ -13,6 +14,7 @@ let hyperfocusManager: HyperfocusManager;
 let notificationBlocker: NotificationBlocker;
 let taskTracker: TaskTracker;
 let gamificationManager: GamificationManager;
+let themeManager: ThemeManager;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('TDAH Dev Helper está ativo!');
@@ -27,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext) {
         notificationBlocker = new NotificationBlocker();
         taskTracker = new TaskTracker(apiClient);
         gamificationManager = GamificationManager.getInstance(apiClient);
+        themeManager = ThemeManager.getInstance();
 
         // Registrar comandos
         const disposables = [
@@ -134,6 +137,11 @@ export async function activate(context: vscode.ExtensionContext) {
             // Comandos de Gamificação
             vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
                 gamificationManager.showProfile();
+            }),
+
+            // Comandos de Temas
+            vscode.commands.registerCommand('tdah-dev-helper.changeTheme', () => {
+                themeManager.showThemePicker();
             })
         ];
 
@@ -146,7 +154,8 @@ export async function activate(context: vscode.ExtensionContext) {
             hyperfocusManager.initialize(),
             notificationBlocker.initialize(),
             taskTracker.initialize(),
-            gamificationManager.initialize()
+            gamificationManager.initialize(),
+            themeManager.initialize()
         ]);
 
         // Mostrar mensagem de boas-vindas
@@ -176,6 +185,7 @@ export async function deactivate() {
         notificationBlocker?.dispose();
         taskTracker?.dispose();
         gamificationManager?.dispose();
+        themeManager?.dispose();
 
         console.log('TDAH Dev Helper foi desativado.');
     } catch (error) {

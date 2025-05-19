@@ -7,14 +7,12 @@ export interface BlockedNotification {
 }
 
 export class NotificationBlocker {
-    private config: vscode.WorkspaceConfiguration;
     private isBlocking: boolean = false;
     private blockedNotifications: BlockedNotification[] = [];
     private disposables: vscode.Disposable[] = [];
     private statusBarItem: vscode.StatusBarItem;
 
     constructor() {
-        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
             99

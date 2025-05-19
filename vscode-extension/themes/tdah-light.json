@@ -1,0 +1,111 @@
+{
+    "name": "TDAH Light",
+    "type": "light",
+    "colors": {
+        "editor.background": "#FFFFFF",
+        "editor.foreground": "#2C3E50",
+        "activityBar.background": "#F5F5F5",
+        "activityBar.foreground": "#2C3E50",
+        "statusBar.background": "#F5F5F5",
+        "statusBar.foreground": "#2C3E50",
+        "titleBar.activeBackground": "#F5F5F5",
+        "titleBar.activeForeground": "#2C3E50",
+        "sideBar.background": "#F5F5F5",
+        "sideBar.foreground": "#2C3E50",
+        "focusBorder": "#3498DB",
+        "editor.selectionBackground": "#3498DB33",
+        "editor.selectionForeground": "#2C3E50",
+        "editor.lineHighlightBackground": "#F8F9FA",
+        "editor.lineHighlightBorder": "#E9ECEF",
+        "editorCursor.foreground": "#3498DB",
+        "editor.wordHighlightBackground": "#3498DB22",
+        "editor.wordHighlightBorder": "#3498DB44",
+        "editor.findMatchBackground": "#F1C40F33",
+        "editor.findMatchBorder": "#F1C40F66",
+        "editor.findRangeHighlightBackground": "#F1C40F22",
+        "editor.findRangeHighlightBorder": "#F1C40F44",
+        "editor.inactiveSelectionBackground": "#3498DB22",
+        "editor.inactiveSelectionForeground": "#2C3E50",
+        "minimap.background": "#F5F5F5",
+        "minimap.selectionHighlight": "#3498DB33",
+        "minimap.findMatchHighlight": "#F1C40F33",
+        "minimap.errorHighlight": "#E74C3C33",
+        "minimap.warningHighlight": "#F39C1233",
+        "minimapGutter.addedBackground": "#2ECC7133",
+        "minimapGutter.modifiedBackground": "#F1C40F33",
+        "minimapGutter.deletedBackground": "#E74C3C33",
+        "editorGroupHeader.background": "#F5F5F5",
+        "editorGroupHeader.foreground": "#2C3E50",
+        "editorGroupHeader.tabsBackground": "#F5F5F5",
+        "editorGroupHeader.tabsForeground": "#2C3E50",
+        "editorGroupHeader.tabsBorder": "#E9ECEF",
+        "editorGroupHeader.tabsActiveBackground": "#FFFFFF",
+        "editorGroupHeader.tabsActiveForeground": "#2C3E50",
+        "editorGroupHeader.tabsActiveBorder": "#3498DB",
+        "editorGroupHeader.tabsInactiveBackground": "#F5F5F5",
+        "editorGroupHeader.tabsInactiveForeground": "#95A5A6",
+        "editorGroupHeader.tabsInactiveBorder": "#E9ECEF",
+        "editorGroupHeader.tabsHoverBackground": "#FFFFFF",
+        "editorGroupHeader.tabsHoverForeground": "#2C3E50",
+        "editorGroupHeader.tabsHoverBorder": "#3498DB",
+        "editorGroupHeader.tabsUnfocusedBackground": "#F5F5F5",
+        "editorGroupHeader.tabsUnfocusedForeground": "#95A5A6",
+        "editorGroupHeader.tabsUnfocusedBorder": "#E9ECEF",
+        "editorGroupHeader.tabsUnfocusedActiveBackground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedActiveForeground": "#2C3E50",
+        "editorGroupHeader.tabsUnfocusedActiveBorder": "#3498DB",
+        "editorGroupHeader.tabsUnfocusedInactiveBackground": "#F5F5F5",
+        "editorGroupHeader.tabsUnfocusedInactiveForeground": "#95A5A6",
+        "editorGroupHeader.tabsUnfocusedInactiveBorder": "#E9ECEF",
+        "editorGroupHeader.tabsUnfocusedHoverBackground": "#FFFFFF",
+        "editorGroupHeader.tabsUnfocusedHoverForeground": "#2C3E50",
+        "editorGroupHeader.tabsUnfocusedHoverBorder": "#3498DB"
+    },
+    "tokenColors": [
+        {
+            "name": "Keywords",
+            "scope": ["keyword", "storage", "type"],
+            "settings": {
+                "foreground": "#3498DB",
+                "fontStyle": "bold"
+            }
+        },
+        {
+            "name": "Functions",
+            "scope": ["entity.name.function", "support.function"],
+            "settings": {
+                "foreground": "#2ECC71",
+                "fontStyle": "bold"
+            }
+        },
+        {
+            "name": "Strings",
+            "scope": ["string", "string.template"],
+            "settings": {
+                "foreground": "#E67E22"
+            }
+        },
+        {
+            "name": "Comments",
+            "scope": ["comment", "punctuation.definition.comment"],
+            "settings": {
+                "foreground": "#95A5A6",
+                "fontStyle": "italic"
+            }
+        },
+        {
+            "name": "Variables",
+            "scope": ["variable", "variable.other"],
+            "settings": {
+                "foreground": "#2C3E50"
+            }
+        },
+        {
+            "name": "Numbers",
+            "scope": ["constant.numeric"],
+            "settings": {
+                "foreground": "#9B59B6"
+            }
+        }
+    ]
+} 
