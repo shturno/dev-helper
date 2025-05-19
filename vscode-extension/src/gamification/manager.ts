@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { ApiClient, UserData } from '../api/client';
 
 export interface Achievement {
     id: string;
@@ -17,30 +16,46 @@ export interface LevelUpReward {
     rewards: string[];
 }
 
+export interface UserData {
+    level: number;
+    xp_points: number;
+    xp_for_next_level: number;
+    title: string;
+}
+
 export class GamificationManager {
     private static instance: GamificationManager;
-    private apiClient: ApiClient;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
     private achievements: Achievement[] = [];
     private levelUpRewards: LevelUpReward[] = [];
-    private currentUserData: UserData | null = null;
+    private currentUserData: UserData;
 
-    private constructor(apiClient: ApiClient) {
-        this.apiClient = apiClient;
+    private constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
             98
         );
         this.initializeAchievements();
         this.initializeLevelRewards();
+        this.initializeUserData();
     }
 
-    public static getInstance(apiClient: ApiClient): GamificationManager {
+    public static getInstance(): GamificationManager {
         if (!GamificationManager.instance) {
-            GamificationManager.instance = new GamificationManager(apiClient);
+            GamificationManager.instance = new GamificationManager();
         }
         return GamificationManager.instance;
+    }
+
+    private initializeUserData(): void {
+        // Inicializar com dados padrão
+        this.currentUserData = {
+            level: 1,
+            xp_points: 0,
+            xp_for_next_level: 100,
+            title: 'Iniciante'
+        };
     }
 
     private initializeAchievements(): void {
@@ -113,9 +128,6 @@ export class GamificationManager {
     }
 
     public async initialize(): Promise<void> {
-        // Carregar dados do usuário
-        await this.loadUserData();
-
         // Registrar comando para mostrar perfil
         this.disposables.push(
             vscode.commands.registerCommand(
@@ -132,21 +144,7 @@ export class GamificationManager {
         this.startAchievementCheck();
     }
 
-    private async loadUserData(): Promise<void> {
-        try {
-            this.currentUserData = await this.apiClient.authenticate();
-            this.updateStatusBar();
-        } catch (error) {
-            console.error('Erro ao carregar dados do usuário:', error);
-        }
-    }
-
     private updateStatusBar(): void {
-        if (!this.currentUserData) {
-            this.statusBarItem.text = '$(account) Carregando...';
-            return;
-        }
-
         const { level, xp_points, xp_for_next_level, title } = this.currentUserData;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
 
@@ -162,15 +160,32 @@ export class GamificationManager {
     }
 
     private async checkAchievements(): Promise<void> {
-        // TODO: Implementar verificação de conquistas
-        // Isso será integrado com o backend para verificar progresso
+        // Verificar conquistas localmente
+        const now = Date.now();
+        const hour = new Date().getHours();
+
+        // Verificar conquistas baseadas em tempo
+        if (hour >= 5 && hour < 9) {
+            this.unlockAchievement('early_bird');
+        } else if (hour >= 22 || hour < 5) {
+            this.unlockAchievement('night_owl');
+        }
+    }
+
+    private unlockAchievement(achievementId: string): void {
+        const achievement = this.achievements.find(a => a.id === achievementId);
+        if (achievement && !achievement.unlockedAt) {
+            achievement.unlockedAt = Date.now();
+            this.addXP(achievement.xpReward);
+            vscode.window.showInformationMessage(
+                `🏆 Conquista Desbloqueada: ${achievement.title}! +${achievement.xpReward} XP`
+            );
+        }
     }
 
     public async onTaskCompleted(xpEarned: number): Promise<void> {
-        if (!this.currentUserData) return;
-
         const oldLevel = this.currentUserData.level;
-        await this.loadUserData(); // Recarregar dados atualizados
+        this.addXP(xpEarned);
 
         if (this.currentUserData.level > oldLevel) {
             await this.handleLevelUp();
@@ -184,11 +199,31 @@ export class GamificationManager {
         this.updateStatusBar();
     }
 
-    private async handleLevelUp(): Promise<void> {
-        if (!this.currentUserData) return;
+    private addXP(amount: number): void {
+        this.currentUserData.xp_points += amount;
 
+        // Calcular novo nível
+        const newLevel = Math.floor(this.currentUserData.xp_points / 100) + 1;
+        if (newLevel > this.currentUserData.level) {
+            this.currentUserData.level = newLevel;
+            this.currentUserData.title = this.getLevelTitle(newLevel);
+        }
+
+        // Atualizar XP necessário para próximo nível
+        this.currentUserData.xp_for_next_level = newLevel * 100;
+    }
+
+    private getLevelTitle(level: number): string {
+        if (level >= 30) return 'Mestre';
+        if (level >= 20) return 'Adepto';
+        if (level >= 10) return 'Iniciado';
+        if (level >= 5) return 'Aprendiz';
+        return 'Iniciante';
+    }
+
+    private async handleLevelUp(): Promise<void> {
         const levelUpReward = this.levelUpRewards.find(
-            reward => reward.level === this.currentUserData!.level
+            reward => reward.level === this.currentUserData.level
         );
 
         if (levelUpReward) {
@@ -284,11 +319,6 @@ export class GamificationManager {
     }
 
     public showProfile(): void {
-        if (!this.currentUserData) {
-            vscode.window.showInformationMessage('Carregando dados do perfil...');
-            return;
-        }
-
         const panel = vscode.window.createWebviewPanel(
             'userProfile',
             'Perfil do Desenvolvedor',
@@ -303,8 +333,6 @@ export class GamificationManager {
     }
 
     private getProfileContent(): string {
-        if (!this.currentUserData) return '';
-
         const { level, xp_points, xp_for_next_level, title } = this.currentUserData;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
 

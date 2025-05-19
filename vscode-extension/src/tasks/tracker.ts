@@ -1,23 +1,59 @@
 import * as vscode from 'vscode';
-import { ApiClient, Task, Subtask } from '../api/client';
-import { GamificationManager } from '../gamification/manager';
+
+export interface Task {
+    id: number;
+    title: string;
+    description: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    subtasks: Subtask[];
+}
+
+export interface Subtask {
+    id: number;
+    taskId: number;
+    title: string;
+    estimatedMinutes: number;
+    completed: boolean;
+}
 
 export class TaskTracker {
-    private apiClient: ApiClient;
-    private gamificationManager: GamificationManager;
     private currentTask: Task | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
     private webviewPanel: vscode.WebviewPanel | null = null;
+    private tasks: Task[] = [];
 
-    constructor(apiClient: ApiClient) {
-        this.apiClient = apiClient;
-        this.gamificationManager = GamificationManager.getInstance(apiClient);
+    constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
         );
         this.statusBarItem.command = 'tdah-dev-helper.showTaskDetails';
+        
+        // Inicializar com algumas tarefas de exemplo
+        this.tasks = [
+            {
+                id: 1,
+                title: 'Implementar autenticação',
+                description: 'Adicionar JWT e proteção de rotas',
+                status: 'pending',
+                subtasks: [
+                    { id: 1, taskId: 1, title: 'Configurar JWT', estimatedMinutes: 30, completed: false },
+                    { id: 2, taskId: 1, title: 'Implementar middleware de autenticação', estimatedMinutes: 45, completed: false },
+                    { id: 3, taskId: 1, title: 'Testar endpoints protegidos', estimatedMinutes: 30, completed: false }
+                ]
+            },
+            {
+                id: 2,
+                title: 'Corrigir bugs no frontend',
+                description: 'Resolver problemas de layout e responsividade',
+                status: 'pending',
+                subtasks: [
+                    { id: 4, taskId: 2, title: 'Corrigir layout em telas pequenas', estimatedMinutes: 30, completed: false },
+                    { id: 5, taskId: 2, title: 'Ajustar componentes responsivos', estimatedMinutes: 45, completed: false }
+                ]
+            }
+        ];
     }
 
     public initialize(): void {
@@ -47,9 +83,7 @@ export class TaskTracker {
 
         // Exibir status bar
         this.statusBarItem.show();
-
-        // Verificar se há uma tarefa ativa
-        this.loadActiveTask();
+        this.updateStatusBar();
     }
 
     public dispose(): void {
@@ -62,11 +96,8 @@ export class TaskTracker {
 
     public async selectTask(): Promise<void> {
         try {
-            // Obter lista de tarefas
-            const tasks = await this.apiClient.getUserTasks();
-            
             // Filtrar apenas tarefas pendentes
-            const pendingTasks = tasks.filter(t => t.status === 'pending');
+            const pendingTasks = this.tasks.filter(t => t.status === 'pending');
             
             if (pendingTasks.length === 0) {
                 vscode.window.showInformationMessage('Não há tarefas pendentes');
@@ -87,29 +118,8 @@ export class TaskTracker {
 
             if (selected) {
                 this.currentTask = selected.task;
-                
-                // Verificar se a tarefa já tem subtarefas
-                let subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
-                
-                // Se não tiver subtarefas, oferecer decomposição
-                if (subtasks.length === 0) {
-                    const shouldDecompose = await vscode.window.showInformationMessage(
-                        'Esta tarefa não possui subtarefas. Deseja decompô-la em passos de 15 minutos?',
-                        'Sim', 'Não'
-                    );
-                    
-                    if (shouldDecompose === 'Sim') {
-                        await this.decomposeTask(this.currentTask);
-                        subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
-                    }
-                }
-
-                // Atualizar visualização
                 this.updateStatusBar();
                 this.showTaskDetails();
-
-                // Notificar backend sobre tarefa ativa
-                await this.apiClient.setActiveTask(this.currentTask.id);
             }
         } catch (error) {
             console.error('Erro ao selecionar tarefa:', error);
@@ -143,28 +153,45 @@ export class TaskTracker {
         );
 
         this.webviewPanel.webview.html = this.getDashboardContent();
+        
+        // Lidar com mensagens do webview
+        this.webviewPanel.webview.onDidReceiveMessage(async message => {
+            switch (message.command) {
+                case 'selectTask':
+                    await this.selectTask();
+                    break;
+                case 'decomposeTask':
+                    await this.decomposeCurrentTask();
+                    break;
+                case 'startFocus':
+                    await vscode.commands.executeCommand('tdah-dev-helper.startFocus');
+                    break;
+                case 'showProfile':
+                    await vscode.commands.executeCommand('tdah-dev-helper.showProfile');
+                    break;
+                case 'showBlockedNotifications':
+                    await vscode.commands.executeCommand('tdah-dev-helper.showBlockedNotifications');
+                    break;
+            }
+        });
+
         this.webviewPanel.onDidDispose(() => {
             this.webviewPanel = null;
         });
-    }
-
-    private async loadActiveTask(): Promise<void> {
-        try {
-            const activeTask = await this.apiClient.getActiveTask();
-            if (activeTask) {
-                this.currentTask = activeTask;
-                this.updateStatusBar();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar tarefa ativa:', error);
-        }
     }
 
     private async decomposeTask(task: Task): Promise<void> {
         try {
             vscode.window.showInformationMessage('Decompondo tarefa em subtarefas de 15 minutos...');
             
-            await this.apiClient.decomposeTask(task.id);
+            // Simular decomposição de tarefa
+            const newSubtasks = [
+                { id: task.subtasks.length + 1, taskId: task.id, title: 'Análise inicial', estimatedMinutes: 15, completed: false },
+                { id: task.subtasks.length + 2, taskId: task.id, title: 'Implementação', estimatedMinutes: 30, completed: false },
+                { id: task.subtasks.length + 3, taskId: task.id, title: 'Testes', estimatedMinutes: 15, completed: false }
+            ];
+            
+            task.subtasks.push(...newSubtasks);
             
             vscode.window.showInformationMessage('Tarefa decomposta com sucesso!');
             
@@ -197,8 +224,7 @@ export class TaskTracker {
             }
         );
 
-        const subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
-        this.webviewPanel.webview.html = this.getTaskDetailsContent(this.currentTask, subtasks);
+        this.webviewPanel.webview.html = this.getTaskDetailsContent(this.currentTask);
 
         this.webviewPanel.onDidDispose(() => {
             this.webviewPanel = null;
@@ -218,26 +244,20 @@ export class TaskTracker {
     }
 
     private async completeSubtask(subtaskId: number): Promise<void> {
-        try {
-            const result = await this.apiClient.completeSubtask(subtaskId);
-            
-            // Notificar sistema de gamificação
-            await this.gamificationManager.onTaskCompleted(result.xp_earned);
+        if (!this.currentTask) return;
 
-            // Se todas as subtarefas foram concluídas
-            if (result.all_completed) {
-                const taskXp = this.currentTask?.xpReward || 0;
-                await this.gamificationManager.onTaskCompleted(taskXp);
-                
-                this.currentTask = null;
-                this.updateStatusBar();
-            }
-
-            // Atualizar visualização
+        const subtask = this.currentTask.subtasks.find(s => s.id === subtaskId);
+        if (subtask) {
+            subtask.completed = true;
+            this.updateStatusBar();
             this.showTaskDetails();
-        } catch (error) {
-            console.error('Erro ao completar subtarefa:', error);
-            vscode.window.showErrorMessage('Erro ao completar subtarefa');
+
+            // Verificar se todas as subtarefas foram concluídas
+            const allCompleted = this.currentTask.subtasks.every(s => s.completed);
+            if (allCompleted) {
+                this.currentTask.status = 'completed';
+                vscode.window.showInformationMessage('Parabéns! Tarefa concluída! 🎉');
+            }
         }
     }
 
@@ -258,9 +278,9 @@ export class TaskTracker {
         this.statusBarItem.tooltip = `${completedSubtasks}/${totalSubtasks} subtarefas concluídas`;
     }
 
-    private getTaskDetailsContent(task: Task, subtasks: Subtask[]): string {
-        const completedSubtasks = subtasks.filter(s => s.completed).length;
-        const totalSubtasks = subtasks.length;
+    private getTaskDetailsContent(task: Task): string {
+        const completedSubtasks = task.subtasks.filter(s => s.completed).length;
+        const totalSubtasks = task.subtasks.length;
         const progress = totalSubtasks > 0 
             ? Math.round((completedSubtasks / totalSubtasks) * 100) 
             : 0;
@@ -360,7 +380,7 @@ export class TaskTracker {
 
                 <h2>Subtarefas</h2>
                 <ul class="subtask-list">
-                    ${subtasks.map(subtask => `
+                    ${task.subtasks.map(subtask => `
                         <li class="subtask-item">
                             <input type="checkbox" 
                                    class="subtask-checkbox" 
@@ -415,52 +435,189 @@ export class TaskTracker {
                         padding: 20px;
                         color: var(--vscode-editor-foreground);
                         background-color: var(--vscode-editor-background);
+                        line-height: 1.6;
+                    }
+                    .dashboard-container {
+                        max-width: 1200px;
+                        margin: 0 auto;
                     }
                     .dashboard-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
                         margin-bottom: 30px;
+                        padding-bottom: 20px;
+                        border-bottom: 1px solid var(--vscode-panel-border);
                     }
                     .dashboard-title {
                         font-size: 2em;
-                        margin-bottom: 10px;
+                        margin: 0;
+                        color: var(--vscode-editor-foreground);
                     }
-                    .dashboard-section {
+                    .dashboard-subtitle {
+                        color: var(--vscode-descriptionForeground);
+                        margin: 5px 0 0 0;
+                    }
+                    .dashboard-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                        gap: 20px;
                         margin-bottom: 30px;
                     }
-                    .section-title {
-                        font-size: 1.5em;
-                        margin-bottom: 15px;
+                    .dashboard-card {
+                        background-color: var(--vscode-editor-inactiveSelectionBackground);
+                        border-radius: 8px;
+                        padding: 20px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .card-title {
+                        font-size: 1.2em;
+                        margin: 0 0 15px 0;
+                        color: var(--vscode-editor-foreground);
                     }
                     .action-button {
+                        display: inline-block;
                         padding: 8px 16px;
                         background-color: var(--vscode-button-background);
                         color: var(--vscode-button-foreground);
                         border: none;
                         border-radius: 4px;
                         cursor: pointer;
-                        margin-right: 10px;
+                        margin: 5px;
+                        text-decoration: none;
+                        font-size: 0.9em;
                     }
                     .action-button:hover {
                         background-color: var(--vscode-button-hoverBackground);
                     }
+                    .action-button.secondary {
+                        background-color: var(--vscode-button-secondaryBackground);
+                        color: var(--vscode-button-secondaryForeground);
+                    }
+                    .action-button.secondary:hover {
+                        background-color: var(--vscode-button-secondaryHoverBackground);
+                    }
+                    .stats-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                        gap: 15px;
+                        margin-top: 15px;
+                    }
+                    .stat-item {
+                        text-align: center;
+                        padding: 10px;
+                        background-color: var(--vscode-editor-background);
+                        border-radius: 4px;
+                    }
+                    .stat-value {
+                        font-size: 1.5em;
+                        font-weight: bold;
+                        color: var(--vscode-editor-foreground);
+                    }
+                    .stat-label {
+                        font-size: 0.9em;
+                        color: var(--vscode-descriptionForeground);
+                    }
+                    .task-list {
+                        margin-top: 15px;
+                    }
+                    .task-item {
+                        padding: 10px;
+                        margin-bottom: 10px;
+                        background-color: var(--vscode-editor-background);
+                        border-radius: 4px;
+                        border-left: 4px solid var(--vscode-button-background);
+                    }
+                    .task-item.completed {
+                        border-left-color: var(--vscode-gitDecoration-addedResourceForeground);
+                        opacity: 0.7;
+                    }
+                    .task-title {
+                        font-weight: bold;
+                        margin: 0 0 5px 0;
+                    }
+                    .task-description {
+                        font-size: 0.9em;
+                        color: var(--vscode-descriptionForeground);
+                        margin: 0;
+                    }
+                    .task-actions {
+                        margin-top: 10px;
+                        display: flex;
+                        gap: 10px;
+                    }
+                    .task-actions button {
+                        font-size: 0.8em;
+                        padding: 4px 8px;
+                    }
                 </style>
             </head>
             <body>
-                <div class="dashboard-header">
-                    <h1 class="dashboard-title">TDAH Dev Helper</h1>
-                    <p>Seu assistente de produtividade</p>
-                </div>
+                <div class="dashboard-container">
+                    <div class="dashboard-header">
+                        <div>
+                            <h1 class="dashboard-title">TDAH Dev Helper</h1>
+                            <p class="dashboard-subtitle">Seu assistente de produtividade</p>
+                        </div>
+                        <div>
+                            <button class="action-button" onclick="startFocus()">
+                                $(eye) Iniciar Modo Hiperfoco
+                            </button>
+                            <button class="action-button secondary" onclick="showProfile()">
+                                $(account) Ver Perfil
+                            </button>
+                        </div>
+                    </div>
 
-                <div class="dashboard-section">
-                    <h2 class="section-title">Ações Rápidas</h2>
-                    <button class="action-button" onclick="selectTask()">
-                        Selecionar Tarefa
-                    </button>
-                    <button class="action-button" onclick="startFocus()">
-                        Iniciar Modo Hiperfoco
-                    </button>
-                    <button class="action-button" onclick="showTaskDetails()">
-                        Ver Tarefa Atual
-                    </button>
+                    <div class="dashboard-grid">
+                        <div class="dashboard-card">
+                            <h2 class="card-title">Ações Rápidas</h2>
+                            <div>
+                                <button class="action-button" onclick="selectTask()">
+                                    $(tasklist) Selecionar Tarefa
+                                </button>
+                                <button class="action-button" onclick="decomposeTask()">
+                                    $(split-horizontal) Decompor Tarefa
+                                </button>
+                                <button class="action-button" onclick="showBlockedNotifications()">
+                                    $(bell) Ver Notificações
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-card">
+                            <h2 class="card-title">Estatísticas</h2>
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <div class="stat-value">0</div>
+                                    <div class="stat-label">Tarefas Hoje</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">0h</div>
+                                    <div class="stat-label">Tempo Foco</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">0</div>
+                                    <div class="stat-label">XP Ganho</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h2 class="card-title">Tarefas Ativas</h2>
+                        <div class="task-list">
+                            <div class="task-item">
+                                <h3 class="task-title">Nenhuma tarefa selecionada</h3>
+                                <p class="task-description">Selecione uma tarefa para começar a trabalhar</p>
+                                <div class="task-actions">
+                                    <button class="action-button" onclick="selectTask()">
+                                        Selecionar Tarefa
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <script>
@@ -470,12 +627,46 @@ export class TaskTracker {
                         vscode.postMessage({ command: 'selectTask' });
                     }
                     
+                    function decomposeTask() {
+                        vscode.postMessage({ command: 'decomposeTask' });
+                    }
+                    
                     function startFocus() {
                         vscode.postMessage({ command: 'startFocus' });
                     }
                     
-                    function showTaskDetails() {
-                        vscode.postMessage({ command: 'showTaskDetails' });
+                    function showProfile() {
+                        vscode.postMessage({ command: 'showProfile' });
+                    }
+                    
+                    function showBlockedNotifications() {
+                        vscode.postMessage({ command: 'showBlockedNotifications' });
+                    }
+
+                    // Atualizar estatísticas periodicamente
+                    setInterval(() => {
+                        vscode.postMessage({ command: 'updateStats' });
+                    }, 30000);
+
+                    // Lidar com mensagens do VS Code
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        switch (message.command) {
+                            case 'updateStats':
+                                updateStatsDisplay(message.stats);
+                                break;
+                            case 'updateTasks':
+                                updateTasksList(message.tasks);
+                                break;
+                        }
+                    });
+
+                    function updateStatsDisplay(stats) {
+                        // Atualizar estatísticas quando receber dados
+                    }
+
+                    function updateTasksList(tasks) {
+                        // Atualizar lista de tarefas quando receber dados
                     }
                 </script>
             </body>

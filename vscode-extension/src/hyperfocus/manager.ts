@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { ApiClient } from '../api/client';
 
 export interface HyperfocusContext {
     reason: 'manual' | 'complex_file' | 'peak_time';
@@ -9,15 +8,19 @@ export interface HyperfocusContext {
 
 export class HyperfocusManager {
     private static instance: HyperfocusManager;
-    private apiClient: ApiClient;
     private config: vscode.WorkspaceConfiguration;
     public isActive: boolean = false;
     private startTime: number | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
+    private originalSettings: {
+        theme: string;
+        sidebarVisible: boolean;
+        minimapEnabled: boolean;
+        fontSize: number;
+    } | null = null;
 
     private constructor() {
-        this.apiClient = new ApiClient();
         this.config = vscode.workspace.getConfiguration('tdahDevHelper');
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
@@ -56,15 +59,12 @@ export class HyperfocusManager {
         }
 
         try {
+            // Salvar configurações atuais
+            this.saveCurrentSettings();
+            
             // Registrar início da sessão
             this.startTime = Date.now();
-            await this.apiClient.logFocusSession({
-                start_time: this.startTime,
-                trigger: context.reason,
-                file_complexity: context.complexity,
-                file_name: context.fileName
-            });
-
+            
             // Ativar modo hiperfoco
             this.isActive = true;
             this.statusBarItem.show();
@@ -80,6 +80,8 @@ export class HyperfocusManager {
         } catch (error) {
             console.error('Erro ao ativar modo hiperfoco:', error);
             vscode.window.showErrorMessage('Erro ao ativar modo hiperfoco');
+            // Restaurar configurações em caso de erro
+            await this.restoreNormalSettings();
         }
     }
 
@@ -89,12 +91,6 @@ export class HyperfocusManager {
         }
 
         try {
-            // Registrar fim da sessão
-            if (this.startTime) {
-                const duration = Date.now() - this.startTime;
-                await this.apiClient.endFocusSession({ duration });
-            }
-
             // Desativar modo hiperfoco
             this.isActive = false;
             this.startTime = null;
@@ -103,8 +99,11 @@ export class HyperfocusManager {
             // Restaurar configurações normais
             await this.restoreNormalSettings();
 
-            // Mostrar notificação
-            vscode.window.showInformationMessage('Modo Hiperfoco desativado');
+            // Mostrar notificação com duração da sessão
+            const duration = this.getSessionDuration();
+            vscode.window.showInformationMessage(
+                `Modo Hiperfoco desativado. Duração: ${duration}`
+            );
 
         } catch (error) {
             console.error('Erro ao desativar modo hiperfoco:', error);
@@ -112,28 +111,78 @@ export class HyperfocusManager {
         }
     }
 
+    private saveCurrentSettings(): void {
+        const config = vscode.workspace.getConfiguration();
+        this.originalSettings = {
+            theme: config.get('workbench.colorTheme', 'Default Dark+'),
+            sidebarVisible: true,
+            minimapEnabled: config.get('editor.minimap.enabled', true),
+            fontSize: config.get('editor.fontSize', 14)
+        };
+    }
+
     private async applyHyperfocusSettings(): Promise<void> {
-        // Bloquear notificações se configurado
-        if (this.config.get('notifications.blockDuringFocus', true)) {
-            // Implementar bloqueio de notificações
-        }
+        const config = vscode.workspace.getConfiguration();
 
         // Aplicar tema de hiperfoco
-        // TODO: Implementar mudança de tema
+        const theme = this.config.get('theme', 'tdah-dark');
+        await config.update('workbench.colorTheme', theme, true);
 
         // Esconder barra lateral se configurado
-        // TODO: Implementar ocultação da barra lateral
+        if (this.config.get('hideSidebar', true)) {
+            try {
+                await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
+            } catch (error) {
+                console.warn('Não foi possível esconder a barra lateral:', error);
+            }
+        }
+
+        // Esconder minimapa se configurado
+        if (this.config.get('hideMinimap', true)) {
+            await config.update('editor.minimap.enabled', false, true);
+        }
+
+        // Aumentar tamanho da fonte se configurado
+        if (this.config.get('increaseFontSize', true)) {
+            const currentSize = config.get('editor.fontSize', 14);
+            await config.update('editor.fontSize', currentSize + 2, true);
+        }
+
+        // Desativar distrações
+        await config.update('editor.wordWrap', 'off', true);
+        await config.update('editor.renderWhitespace', 'none', true);
+        await config.update('editor.guides.bracketPairs', false, true);
+        await config.update('editor.suggest.showWords', false, true);
     }
 
     private async restoreNormalSettings(): Promise<void> {
-        // Restaurar notificações
-        // TODO: Implementar restauração de notificações
+        if (!this.originalSettings) {
+            return;
+        }
 
-        // Restaurar tema normal
-        // TODO: Implementar restauração de tema
+        const config = vscode.workspace.getConfiguration();
 
-        // Restaurar barra lateral
-        // TODO: Implementar restauração da barra lateral
+        // Restaurar todas as configurações originais
+        await Promise.all([
+            config.update('workbench.colorTheme', this.originalSettings.theme, true),
+            config.update('editor.minimap.enabled', this.originalSettings.minimapEnabled, true),
+            config.update('editor.fontSize', this.originalSettings.fontSize, true),
+            config.update('editor.wordWrap', 'on', true),
+            config.update('editor.renderWhitespace', 'all', true),
+            config.update('editor.guides.bracketPairs', true, true),
+            config.update('editor.suggest.showWords', true, true)
+        ]);
+
+        // Restaurar barra lateral se necessário
+        if (this.config.get('hideSidebar', true)) {
+            try {
+                await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
+            } catch (error) {
+                console.warn('Não foi possível restaurar a barra lateral:', error);
+            }
+        }
+
+        this.originalSettings = null;
     }
 
     private handleWindowStateChange(e: vscode.WindowState): void {
@@ -154,5 +203,20 @@ export class HyperfocusManager {
             default:
                 return '';
         }
+    }
+
+    private getSessionDuration(): string {
+        if (!this.startTime) {
+            return '0 minutos';
+        }
+
+        const duration = Math.floor((Date.now() - this.startTime) / 1000 / 60);
+        const hours = Math.floor(duration / 60);
+        const minutes = duration % 60;
+
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        }
+        return `${minutes} minutos`;
     }
 } 

@@ -21,11 +21,15 @@ export class NotificationBlocker {
         this.statusBarItem.text = '$(bell-slash) Notificações Bloqueadas';
         this.statusBarItem.tooltip = 'Clique para ver notificações bloqueadas';
         this.statusBarItem.command = 'tdah-dev-helper.showBlockedNotifications';
+        
+        // Inicializar imediatamente
+        this.initialize();
     }
 
     public initialize(): void {
         if (this.isInitialized) return;
         this.isInitialized = true;
+
         // Substituir métodos de notificação
         const originalShowInfo = vscode.window.showInformationMessage;
         const originalShowWarning = vscode.window.showWarningMessage;
@@ -33,61 +37,48 @@ export class NotificationBlocker {
 
         const blocker = this;
 
-        // Handler para notificações com strings
-        const handleStringNotification = function(
+        // Handler para notificações
+        const handleNotification = function(
             originalFn: typeof vscode.window.showInformationMessage,
             message: string,
-            ...items: string[]
-        ): Thenable<string | undefined> {
+            ...items: any[]
+        ): Thenable<any> {
             if (blocker.isBlocking) {
-                blocker.handleNotification(message);
-                return Promise.resolve(undefined);
-            }
-            return originalFn(message, ...items);
-        };
+                // Determinar o tipo de notificação
+                let type = 'info';
+                if (originalFn === originalShowWarning) type = 'warning';
+                if (originalFn === originalShowError) type = 'error';
 
-        // Handler para notificações com MessageItems
-        const handleMessageItemNotification = function(
-            originalFn: typeof vscode.window.showInformationMessage,
-            message: string,
-            ...items: vscode.MessageItem[]
-        ): Thenable<vscode.MessageItem | undefined> {
-            if (blocker.isBlocking) {
-                blocker.handleNotification(message);
+                // Adicionar à lista de notificações bloqueadas
+                blocker.blockedNotifications.push({
+                    type,
+                    message,
+                    timestamp: Date.now()
+                });
+
+                // Atualizar contador na status bar
+                blocker.updateStatusBar();
+
+                // Retornar undefined para não mostrar a notificação
                 return Promise.resolve(undefined);
             }
+
+            // Se não estiver bloqueando, mostrar a notificação normalmente
             return originalFn(message, ...items);
         };
 
         // Substituir métodos originais
         vscode.window.showInformationMessage = function(message: string, ...items: any[]): any {
-            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
-                return handleMessageItemNotification(originalShowInfo, message, ...items as vscode.MessageItem[]);
-            }
-            return handleStringNotification(originalShowInfo, message, ...items as string[]);
+            return handleNotification(originalShowInfo, message, ...items);
         };
 
         vscode.window.showWarningMessage = function(message: string, ...items: any[]): any {
-            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
-                return handleMessageItemNotification(originalShowWarning, message, ...items as vscode.MessageItem[]);
-            }
-            return handleStringNotification(originalShowWarning, message, ...items as string[]);
+            return handleNotification(originalShowWarning, message, ...items);
         };
 
         vscode.window.showErrorMessage = function(message: string, ...items: any[]): any {
-            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
-                return handleMessageItemNotification(originalShowError, message, ...items as vscode.MessageItem[]);
-            }
-            return handleStringNotification(originalShowError, message, ...items as string[]);
+            return handleNotification(originalShowError, message, ...items);
         };
-
-        // Registrar comando para mostrar notificações bloqueadas
-        this.disposables.push(
-            vscode.commands.registerCommand(
-                'tdah-dev-helper.showBlockedNotifications',
-                this.showBlockedNotifications.bind(this)
-            )
-        );
 
         // Restaurar métodos originais ao desativar
         this.disposables.push({
@@ -105,55 +96,27 @@ export class NotificationBlocker {
     }
 
     public startBlocking(): void {
-        if (this.isBlocking) {
-            return;
-        }
-
+        if (this.isBlocking) return;
+        
         this.isBlocking = true;
         this.blockedNotifications = [];
         this.statusBarItem.show();
-
-        vscode.window.showInformationMessage(
-            'Notificações bloqueadas durante o modo hiperfoco'
-        );
+        
+        // Mostrar notificação inicial
+        const originalShowInfo = vscode.window.showInformationMessage;
+        originalShowInfo('Notificações bloqueadas durante o modo hiperfoco');
     }
 
     public stopBlocking(): void {
-        if (!this.isBlocking) {
-            return;
-        }
-
+        if (!this.isBlocking) return;
+        
         this.isBlocking = false;
         this.statusBarItem.hide();
-
+        
         // Mostrar notificações bloqueadas se houver
         if (this.blockedNotifications.length > 0) {
             this.showBlockedNotifications();
         }
-    }
-
-    private handleNotification(message: string): void {
-        if (!this.isBlocking) {
-            return;
-        }
-
-        // Determinar o tipo de notificação
-        let type = 'info';
-        if (message.includes('Warning')) {
-            type = 'warning';
-        } else if (message.includes('Error')) {
-            type = 'error';
-        }
-
-        // Adicionar à lista de notificações bloqueadas
-        this.blockedNotifications.push({
-            type,
-            message,
-            timestamp: Date.now()
-        });
-
-        // Atualizar contador na status bar
-        this.updateStatusBar();
     }
 
     public showBlockedNotifications(): void {

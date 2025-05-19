@@ -24,28 +24,23 @@ export async function activate(context: vscode.ExtensionContext) {
         hyperfocusManager = HyperfocusManager.getInstance();
         notificationBlocker = new NotificationBlocker();
         themeManager = ThemeManager.getInstance();
+        taskTracker = new TaskTracker();
+        gamificationManager = GamificationManager.getInstance();
 
         // Inicializar componentes opcionais baseados na configuração
         const config = vscode.workspace.getConfiguration('tdahDevHelper');
         const apiUrl = config.get<string>('apiUrl');
-        const enableGamification = config.get<boolean>('gamification');
         const debug = config.get<boolean>('debug');
 
         if (debug) {
             console.log('TDAH Dev Helper: Modo debug ativado');
             console.log('TDAH Dev Helper: API URL:', apiUrl || 'não configurada');
-            console.log('TDAH Dev Helper: Gamificação:', enableGamification ? 'ativada' : 'desativada');
         }
 
         if (apiUrl) {
             try {
                 apiClient = new ApiClient(apiUrl);
                 contextDetector = new ContextDetector(apiClient);
-                taskTracker = new TaskTracker(apiClient);
-                
-                if (enableGamification) {
-                    gamificationManager = GamificationManager.getInstance(apiClient);
-                }
             } catch (error) {
                 console.error('TDAH Dev Helper: Erro ao inicializar API:', error);
                 vscode.window.showWarningMessage(
@@ -98,87 +93,85 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
 
-            // Comandos de Tarefas (só disponíveis se API estiver ativa)
-            ...(taskTracker ? [
-                vscode.commands.registerCommand('tdah-dev-helper.showDashboard', () => {
-                    taskTracker?.showDashboard();
-                }),
-                vscode.commands.registerCommand('tdah-dev-helper.selectTask', async () => {
-                    try {
-                        if (!taskTracker) {
-                            throw new Error('TaskTracker não inicializado');
-                        }
-
-                        if (hyperfocusManager?.isActive) {
-                            const shouldStopFocus = await vscode.window.showWarningMessage(
-                                'Você está em modo hiperfoco. Deseja desativá-lo para selecionar uma nova tarefa?',
-                                'Sim', 'Não'
-                            );
-                            
-                            if (shouldStopFocus === 'Sim') {
-                                await hyperfocusManager.deactivateHyperfocus();
-                                notificationBlocker?.stopBlocking();
-                            } else {
-                                return;
-                            }
-                        }
-
-                        await taskTracker.selectTask();
-                    } catch (error) {
-                        console.error('Erro ao selecionar tarefa:', error);
-                        vscode.window.showErrorMessage('Erro ao selecionar tarefa');
+            // Comandos de Tarefas (agora sempre disponíveis)
+            vscode.commands.registerCommand('tdah-dev-helper.showDashboard', () => {
+                taskTracker?.showDashboard();
+            }),
+            vscode.commands.registerCommand('tdah-dev-helper.selectTask', async () => {
+                try {
+                    if (!taskTracker) {
+                        throw new Error('TaskTracker não inicializado');
                     }
-                }),
-                vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', async () => {
-                    try {
-                        if (!taskTracker) {
-                            throw new Error('TaskTracker não inicializado');
-                        }
 
-                        if (hyperfocusManager?.isActive) {
-                            const shouldStopFocus = await vscode.window.showWarningMessage(
-                                'Você está em modo hiperfoco. Deseja desativá-lo para decompor a tarefa?',
-                                'Sim', 'Não'
-                            );
-                            
-                            if (shouldStopFocus === 'Sim') {
-                                await hyperfocusManager.deactivateHyperfocus();
-                                notificationBlocker?.stopBlocking();
-                            } else {
-                                return;
-                            }
+                    if (hyperfocusManager?.isActive) {
+                        const shouldStopFocus = await vscode.window.showWarningMessage(
+                            'Você está em modo hiperfoco. Deseja desativá-lo para selecionar uma nova tarefa?',
+                            'Sim', 'Não'
+                        );
+                        
+                        if (shouldStopFocus === 'Sim') {
+                            await hyperfocusManager.deactivateHyperfocus();
+                            notificationBlocker?.stopBlocking();
+                        } else {
+                            return;
                         }
-
-                        await taskTracker.decomposeCurrentTask();
-                    } catch (error) {
-                        console.error('Erro ao decompor tarefa:', error);
-                        vscode.window.showErrorMessage('Erro ao decompor tarefa');
                     }
+
+                    await taskTracker.selectTask();
+                } catch (error) {
+                    console.error('Erro ao selecionar tarefa:', error);
+                    vscode.window.showErrorMessage('Erro ao selecionar tarefa');
+                }
+            }),
+            vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', async () => {
+                try {
+                    if (!taskTracker) {
+                        throw new Error('TaskTracker não inicializado');
+                    }
+
+                    if (hyperfocusManager?.isActive) {
+                        const shouldStopFocus = await vscode.window.showWarningMessage(
+                            'Você está em modo hiperfoco. Deseja desativá-lo para decompor a tarefa?',
+                            'Sim', 'Não'
+                        );
+                        
+                        if (shouldStopFocus === 'Sim') {
+                            await hyperfocusManager.deactivateHyperfocus();
+                            notificationBlocker?.stopBlocking();
+                        } else {
+                            return;
+                        }
+                    }
+
+                    await taskTracker.decomposeCurrentTask();
+                } catch (error) {
+                    console.error('Erro ao decompor tarefa:', error);
+                    vscode.window.showErrorMessage('Erro ao decompor tarefa');
+                }
+            }),
+
+            // Comando para mostrar notificações bloqueadas (registrado apenas se notificationBlocker estiver ativo)
+            ...(notificationBlocker ? [
+                vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', () => {
+                    notificationBlocker?.showBlockedNotifications();
                 })
             ] : []),
 
-            // Comando para mostrar notificações bloqueadas
-            vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', () => {
-                notificationBlocker?.showBlockedNotifications();
-            }),
-
-            // Comandos de Gamificação (só disponíveis se API e gamificação estiverem ativas)
-            ...(gamificationManager ? [
-                vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
-                    gamificationManager?.showProfile();
-                })
-            ] : [])
+            // Comando para mostrar perfil (agora sempre disponível)
+            vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
+                gamificationManager?.showProfile();
+            })
         ];
 
         // Adicionar disposables ao contexto
         context.subscriptions.push(...disposables);
 
-        // Inicializar componentes (removendo a chamada de initialize() do NotificationBlocker e de outros que já são inicializados no construtor)
+        // Inicializar componentes
         await Promise.all([
             contextDetector?.initialize(),
             hyperfocusManager.initialize(),
-            taskTracker?.initialize(),
-            gamificationManager?.initialize(),
+            taskTracker.initialize(),
+            gamificationManager.initialize(),
             themeManager.initialize()
         ].filter(Boolean));
 
