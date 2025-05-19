@@ -1,0 +1,209 @@
+# Arquitetura do Sistema - Projeto TDAH Dev Helper
+
+## Visão Geral da Arquitetura
+
+O sistema será construído com uma arquitetura distribuída, composta por quatro componentes principais que se comunicam entre si:
+
+1. **Backend API (Laravel/PHP)**
+2. **Frontend Web (React/Next.js)**
+3. **Extensão VS Code (TypeScript)**
+4. **Banco de Dados (MySQL)**
+
+Além disso, o sistema integrará com serviços externos:
+- **Jira API** (para obtenção e manipulação de tickets)
+- **GitHub/GitLab API** (para análise de commits e histórico)
+- **OpenAI API** (para decomposição de tarefas)
+- **APIs de Smartwatch** (para notificações táteis)
+
+## Diagrama de Arquitetura
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  VS Code        │◄────┤  Backend API    │◄────┤  Frontend Web   │
+│  Extension      │     │  (Laravel)      │     │  (React/Next.js)│
+│                 │     │                 │     │                 │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │
+         │                       │
+         │               ┌───────▼───────┐
+         │               │               │
+         └───────────────►   MySQL DB    │
+                         │               │
+                         └───────┬───────┘
+                                 │
+                     ┌───────────┴───────────┐
+                     │                       │
+          ┌──────────▼──┐     ┌─────────────┐│    ┌─────────────┐
+          │             │     │             ││    │             │
+          │  Jira API   │     │ GitHub/     ││    │  OpenAI     │
+          │             │     │ GitLab API  ││    │  API        │
+          └─────────────┘     └─────────────┘│    └─────────────┘
+                              └──────────────┘
+```
+
+## Componentes do Sistema
+
+### 1. Backend API (Laravel/PHP)
+
+O backend será responsável pela lógica de negócios principal, processamento de dados e comunicação com serviços externos.
+
+#### Principais Módulos:
+- **API Controller Layer**: Endpoints RESTful para comunicação com frontend e extensão VS Code
+- **Service Layer**: Lógica de negócios para processamento de tarefas, gamificação e análise de dados
+- **Integration Layer**: Comunicação com APIs externas (Jira, GitHub/GitLab, OpenAI)
+- **Data Access Layer**: Interação com banco de dados MySQL
+- **Authentication & Authorization**: Sistema de autenticação JWT para segurança
+
+#### Tecnologias Específicas:
+- Laravel 11 (Framework PHP)
+- Laravel Sanctum (Autenticação API)
+- Laravel Octane (Performance)
+- Guzzle HTTP (Integração com APIs externas)
+- Laravel Horizon (Gerenciamento de filas)
+
+### 2. Frontend Web (React/Next.js)
+
+Interface web para visualização de dados, configuração do sistema e interação com usuários.
+
+#### Principais Módulos:
+- **Dashboard**: Visualização de progresso e métricas
+- **Task Management**: Interface para gerenciamento de tarefas
+- **Configuration**: Configurações de gamificação e integrações
+- **Reports**: Relatórios de produtividade para tech leads
+- **User Profile**: Gerenciamento de perfil e preferências
+
+#### Tecnologias Específicas:
+- React 19
+- Next.js 14
+- TypeScript
+- TailwindCSS (Estilização)
+- SWR ou React Query (Gerenciamento de estado e cache)
+- Recharts (Visualizações gráficas)
+- DnD Kit (Drag-and-drop para cronogramas)
+
+### 3. Extensão VS Code (TypeScript)
+
+Componente que se integra diretamente ao ambiente de desenvolvimento do usuário.
+
+#### Principais Módulos:
+- **Context Detection**: Detecção de contexto de trabalho (complexidade de arquivo, horário)
+- **Focus Mode**: Ativação e gerenciamento do modo hiperfoco
+- **Notification Manager**: Bloqueio inteligente de notificações
+- **Task Tracker**: Acompanhamento de progresso em tarefas
+- **VS Code API Integration**: Integração com API do VS Code para manipulação do editor
+
+#### Tecnologias Específicas:
+- TypeScript
+- VS Code Extension API
+- WebSockets (Comunicação em tempo real com backend)
+
+### 4. Banco de Dados (MySQL)
+
+Armazenamento persistente de dados do sistema.
+
+#### Principais Entidades:
+- **Users**: Informações de usuários e preferências
+- **Tasks**: Tarefas e subtarefas
+- **ActivityLogs**: Registros de atividades para análise
+- **Rewards**: Sistema de recompensas e níveis
+- **Configurations**: Configurações do sistema
+- **ProductivityMetrics**: Métricas de produtividade
+
+## Fluxos de Comunicação
+
+### 1. Fluxo de Decomposição de Tarefas
+1. Usuário seleciona ticket do Jira no frontend ou extensão VS Code
+2. Backend recebe solicitação de decomposição
+3. Backend consulta OpenAI API para decompor tarefa
+4. Subtarefas são armazenadas no banco de dados
+5. Resultado é enviado para frontend e/ou extensão VS Code
+
+### 2. Fluxo de Ativação do Modo Hiperfoco
+1. Extensão VS Code detecta arquivo complexo ou horário de alta produtividade
+2. Extensão consulta backend para verificar configurações do usuário
+3. Modo hiperfoco é ativado localmente na extensão
+4. Notificações são bloqueadas e interface é ajustada
+5. Logs de atividade são enviados ao backend para análise futura
+
+### 3. Fluxo de Gamificação
+1. Extensão VS Code ou frontend registra atividades do usuário
+2. Backend processa atividades e calcula XP
+3. Banco de dados é atualizado com novo XP e nível
+4. Frontend e extensão são notificados sobre mudanças
+5. Recompensas são desbloqueadas quando aplicável
+
+### 4. Fluxo de Priorização de Tasks
+1. Backend coleta dados de commits do GitHub/GitLab
+2. Backend obtém prazos e prioridades do Jira
+3. Algoritmo de Monte Carlo é executado para previsão de tempo
+4. Resultados são armazenados no banco de dados
+5. Frontend exibe cronograma interativo com drag-and-drop
+
+## Considerações Técnicas
+
+### Escalabilidade
+- **Horizontal Scaling**: Arquitetura preparada para escalar horizontalmente
+- **Caching Layer**: Redis para cache de dados frequentemente acessados
+- **Queue System**: Laravel Horizon para processamento assíncrono de tarefas pesadas
+
+### Performance
+- **API Optimization**: Endpoints otimizados para resposta <500ms
+- **Lazy Loading**: Carregamento sob demanda para dados não críticos
+- **Efficient Queries**: Queries SQL otimizadas e indexadas
+
+### Segurança
+- **JWT Authentication**: Autenticação segura para API
+- **Rate Limiting**: Proteção contra abusos de API
+- **Data Encryption**: Criptografia de dados sensíveis
+- **CORS Policies**: Políticas de segurança para comunicação cross-origin
+
+### Acessibilidade
+- **High Contrast Themes**: Suporte a temas de alto contraste
+- **Keyboard Navigation**: Navegação completa por teclado
+- **Screen Reader Support**: Compatibilidade com leitores de tela
+- **WCAG Compliance**: Conformidade com diretrizes de acessibilidade
+
+## Integrações Externas
+
+### Jira API
+- **Authentication**: OAuth 2.0
+- **Endpoints Utilizados**:
+  - GET /rest/api/3/issue/{issueIdOrKey} (Obter detalhes de tickets)
+  - GET /rest/api/3/search (Buscar tickets)
+  - PUT /rest/api/3/issue/{issueIdOrKey} (Atualizar status de tickets)
+
+### GitHub/GitLab API
+- **Authentication**: OAuth 2.0 / Personal Access Tokens
+- **Endpoints Utilizados**:
+  - GET /repos/{owner}/{repo}/commits (GitHub - Histórico de commits)
+  - GET /projects/{id}/repository/commits (GitLab - Histórico de commits)
+  - GET /repos/{owner}/{repo}/stats/contributors (GitHub - Estatísticas)
+
+### OpenAI API
+- **Authentication**: API Key
+- **Endpoints Utilizados**:
+  - POST /v1/chat/completions (Decomposição de tarefas)
+
+### Smartwatch Integration
+- **Protocols**: Bluetooth LE / Web Bluetooth API
+- **Push Notifications**: Firebase Cloud Messaging para dispositivos compatíveis
+
+## Considerações de Implementação
+
+### Desenvolvimento e Testes
+- **CI/CD Pipeline**: GitHub Actions para integração e entrega contínuas
+- **Test Coverage**: PHPUnit para testes unitários (80% de cobertura)
+- **E2E Testing**: Cypress para testes end-to-end
+- **Performance Testing**: JMeter para testes de carga e performance
+
+### Monitoramento
+- **Error Tracking**: Sentry para rastreamento de erros
+- **Performance Monitoring**: New Relic para monitoramento de performance
+- **Usage Analytics**: Mixpanel para análise de uso e comportamento
+
+### Deployment
+- **Backend**: Docker containers em ambiente cloud
+- **Frontend**: Vercel ou Netlify para hospedagem estática
+- **VS Code Extension**: Visual Studio Marketplace
+- **Database**: Managed MySQL service (AWS RDS ou similar)

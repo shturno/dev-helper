@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: tdah-dev-helper-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: tdah_dev_helper
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: tdah_user
+      MYSQL_PASSWORD: tdah_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - tdah-network
+
+  # PHP/Laravel Backend
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: tdah-dev-helper-backend
+    restart: unless-stopped
+    working_dir: /var/www/
+    volumes:
+      - ../backend:/var/www
+    networks:
+      - tdah-network
+    depends_on:
+      - mysql
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: tdah-dev-helper-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    networks:
+      - tdah-network
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  tdah-network:
+    driver: bridge 

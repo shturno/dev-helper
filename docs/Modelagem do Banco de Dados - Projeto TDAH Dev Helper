@@ -1,0 +1,258 @@
+# Modelagem do Banco de Dados - Projeto TDAH Dev Helper
+
+## Diagrama Entidade-Relacionamento
+
+```
+┌───────────────┐       ┌───────────────┐       ┌───────────────┐
+│    Users      │       │    Tasks      │       │  Subtasks     │
+├───────────────┤       ├───────────────┤       ├───────────────┤
+│ id            │       │ id            │       │ id            │
+│ name          │       │ title         │       │ task_id       │
+│ email         │◄──────┤ user_id       │◄──────┤ description   │
+│ password      │       │ jira_id       │       │ duration      │
+│ xp_points     │       │ description   │       │ completed     │
+│ level         │       │ priority      │       │ order         │
+│ preferences   │       │ due_date      │       │ created_at    │
+│ created_at    │       │ status        │       │ updated_at    │
+│ updated_at    │       │ created_at    │       └───────────────┘
+└───────┬───────┘       │ updated_at    │
+        │               └───────┬───────┘
+        │                       │
+        │               ┌───────▼───────┐
+        │               │ ActivityLogs  │
+        └───────────────┤               │
+                        │ id            │
+                        │ user_id       │
+                        │ task_id       │
+                        │ action_type   │
+                        │ details       │
+                        │ created_at    │
+                        └───────────────┘
+
+┌───────────────┐       ┌───────────────┐       ┌───────────────┐
+│   Rewards     │       │ Productivity  │       │ Integrations  │
+├───────────────┤       │   Metrics     │       ├───────────────┤
+│ id            │       ├───────────────┤       │ id            │
+│ name          │       │ id            │       │ user_id       │
+│ description   │       │ user_id       │       │ type          │
+│ level_required│       │ date          │       │ credentials   │
+│ xp_required   │       │ focus_time    │       │ settings      │
+│ type          │       │ tasks_completed│      │ active        │
+│ content       │       │ commits       │       │ created_at    │
+│ created_at    │       │ created_at    │       │ updated_at    │
+│ updated_at    │       └───────────────┘       └───────────────┘
+└───────────────┘
+```
+
+## Definição das Tabelas
+
+### 1. Users
+
+Armazena informações dos usuários do sistema.
+
+```sql
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    xp_points INT UNSIGNED DEFAULT 0,
+    level INT UNSIGNED DEFAULT 1,
+    preferences JSON,
+    remember_token VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+O campo `preferences` (JSON) armazenará:
+- Configurações de notificações
+- Preferências de tema (incluindo alto contraste)
+- Horários de produtividade
+- Configurações de gamificação
+
+### 2. Tasks
+
+Armazena as tarefas principais, geralmente importadas do Jira.
+
+```sql
+CREATE TABLE tasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    jira_id VARCHAR(50),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    priority TINYINT UNSIGNED DEFAULT 3,
+    due_date TIMESTAMP NULL,
+    status VARCHAR(50) DEFAULT 'pending',
+    estimated_time INT UNSIGNED,
+    actual_time INT UNSIGNED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+### 3. Subtasks
+
+Armazena as microtarefas de 15 minutos geradas a partir das tarefas principais.
+
+```sql
+CREATE TABLE subtasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT UNSIGNED NOT NULL,
+    description TEXT NOT NULL,
+    duration INT UNSIGNED DEFAULT 15,
+    completed BOOLEAN DEFAULT FALSE,
+    order_position INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+```
+
+### 4. ActivityLogs
+
+Registra todas as atividades dos usuários para análise de produtividade e atribuição de XP.
+
+```sql
+CREATE TABLE activity_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    task_id BIGINT UNSIGNED NULL,
+    subtask_id BIGINT UNSIGNED NULL,
+    action_type VARCHAR(50) NOT NULL,
+    details JSON,
+    xp_earned INT UNSIGNED DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+    FOREIGN KEY (subtask_id) REFERENCES subtasks(id) ON DELETE SET NULL
+);
+```
+
+O campo `action_type` pode incluir:
+- task_completed
+- subtask_completed
+- commit_pushed
+- focus_session_completed
+- test_added
+
+### 5. Rewards
+
+Armazena as recompensas disponíveis por nível.
+
+```sql
+CREATE TABLE rewards (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    level_required INT UNSIGNED NOT NULL,
+    xp_required INT UNSIGNED NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    content JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+O campo `type` pode incluir:
+- theme
+- feature_access
+- course
+- badge
+
+### 6. ProductivityMetrics
+
+Armazena métricas diárias de produtividade para análise e relatórios.
+
+```sql
+CREATE TABLE productivity_metrics (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    date DATE NOT NULL,
+    focus_time INT UNSIGNED DEFAULT 0,
+    tasks_completed INT UNSIGNED DEFAULT 0,
+    subtasks_completed INT UNSIGNED DEFAULT 0,
+    commits INT UNSIGNED DEFAULT 0,
+    average_task_completion_time INT UNSIGNED,
+    peak_productivity_start TIME,
+    peak_productivity_end TIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY user_date (user_id, date)
+);
+```
+
+### 7. Integrations
+
+Armazena configurações de integração com serviços externos.
+
+```sql
+CREATE TABLE integrations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    credentials JSON,
+    settings JSON,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+O campo `type` pode incluir:
+- jira
+- github
+- gitlab
+- smartwatch
+
+### 8. UserRewards
+
+Tabela de junção para relacionar usuários e recompensas desbloqueadas.
+
+```sql
+CREATE TABLE user_rewards (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    reward_id BIGINT UNSIGNED NOT NULL,
+    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE CASCADE,
+    UNIQUE KEY user_reward (user_id, reward_id)
+);
+```
+
+## Índices Adicionais
+
+Para garantir performance nas consultas mais frequentes:
+
+```sql
+-- Índice para busca rápida de tarefas por usuário
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+
+-- Índice para busca rápida de subtarefas por tarefa
+CREATE INDEX idx_subtasks_task_id ON subtasks(task_id);
+
+-- Índice para busca rápida de logs por usuário
+CREATE INDEX idx_activity_logs_user_id ON activity_logs(user_id);
+
+-- Índice para busca rápida de métricas por usuário e data
+CREATE INDEX idx_productivity_metrics_user_date ON productivity_metrics(user_id, date);
+```
+
+## Considerações de Performance
+
+1. **Particionamento de Tabelas**:
+   - A tabela `activity_logs` pode crescer rapidamente e se beneficiaria de particionamento por data
+   - A tabela `productivity_metrics` pode ser particionada por mês para consultas históricas eficientes
+
+2. **Campos JSON**:
+   - Índices virtuais podem ser criados para campos JSON frequentemente consultados
+   - Exemplo: `ALTER TABLE users ADD INDEX idx_preferences_theme ((CAST(preferences->>"$.theme" AS CHAR(50))))`
+
+3. **Otimização de Consultas**:
+   - Consultas de relatórios devem utilizar agregações e filtros otimizados
+   - Views materializadas podem ser criadas para relatórios frequentes de tech leads

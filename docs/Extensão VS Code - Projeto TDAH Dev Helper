@@ -1,0 +1,1423 @@
+# Extensão VS Code - Projeto TDAH Dev Helper
+
+## Visão Geral
+
+A extensão VS Code é um componente crítico do sistema, atuando como interface direta com o ambiente de desenvolvimento do usuário. Ela será responsável por detectar contextos de trabalho, ativar o modo hiperfoco, bloquear notificações, rastrear atividades e fornecer feedback visual sobre o progresso das tarefas.
+
+## Estrutura da Extensão
+
+```
+tdah-dev-helper/
+├── .vscode/                  # Configurações do VS Code
+├── src/
+│   ├── extension.ts          # Ponto de entrada principal
+│   ├── api/                  # Comunicação com o backend
+│   │   ├── client.ts         # Cliente HTTP para API Laravel
+│   │   └── models.ts         # Interfaces de dados
+│   ├── context/
+│   │   ├── detector.ts       # Detecção de contexto de trabalho
+│   │   └── analyzer.ts       # Análise de complexidade e padrões
+│   ├── hyperfocus/
+│   │   ├── manager.ts        # Gerenciamento do modo hiperfoco
+│   │   └── actions.ts        # Ações do modo hiperfoco
+│   ├── notifications/
+│   │   ├── blocker.ts        # Bloqueio de notificações
+│   │   └── smartwatch.ts     # Integração com smartwatch
+│   ├── tasks/
+│   │   ├── tracker.ts        # Rastreamento de progresso
+│   │   └── visualizer.ts     # Visualização estilo RPG
+│   ├── gamification/
+│   │   ├── xp.ts             # Sistema de XP
+│   │   └── rewards.ts        # Gerenciamento de recompensas
+│   ├── utils/
+│   │   ├── logger.ts         # Sistema de logs
+│   │   └── telemetry.ts      # Coleta de métricas
+│   └── views/                # Webviews para UI personalizada
+│       ├── dashboard.ts      # Dashboard principal
+│       └── taskView.ts       # Visualização de tarefas
+├── media/                    # Recursos visuais
+│   ├── icons/                # Ícones da extensão
+│   └── themes/               # Temas personalizados
+├── package.json              # Manifesto da extensão
+└── README.md                 # Documentação
+```
+
+## Fluxos Principais
+
+### 1. Fluxo de Inicialização
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VSCode
+    participant Extension
+    participant Backend
+    
+    User->>VSCode: Abre VS Code
+    VSCode->>Extension: Ativa extensão
+    Extension->>Backend: Autentica usuário
+    Backend->>Extension: Retorna configurações
+    Extension->>VSCode: Registra comandos e eventos
+    Extension->>VSCode: Inicializa status bar
+    Extension->>User: Exibe notificação de boas-vindas
+```
+
+Código de inicialização:
+
+```typescript
+// extension.ts
+export function activate(context: vscode.ExtensionContext) {
+    // Inicializar cliente API
+    const apiClient = new ApiClient(context.globalState.get('apiToken'));
+    
+    // Autenticar usuário
+    apiClient.authenticate().then(user => {
+        // Registrar comandos
+        context.subscriptions.push(
+            vscode.commands.registerCommand('tdah-dev-helper.startFocus', startFocusMode),
+            vscode.commands.registerCommand('tdah-dev-helper.showDashboard', showDashboard),
+            vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', decomposeTask)
+        );
+        
+        // Inicializar detectores de contexto
+        const contextDetector = new ContextDetector(apiClient);
+        contextDetector.initialize();
+        
+        // Inicializar rastreador de tarefas
+        const taskTracker = new TaskTracker(apiClient);
+        taskTracker.initialize();
+        
+        // Inicializar status bar
+        const statusBar = new StatusBarManager();
+        statusBar.initialize();
+        
+        // Exibir mensagem de boas-vindas
+        vscode.window.showInformationMessage(`Bem-vindo, ${user.name}! TDAH Dev Helper está ativo.`);
+    });
+}
+```
+
+### 2. Fluxo de Detecção de Contexto e Ativação do Modo Hiperfoco
+
+```mermaid
+sequenceDiagram
+    participant Editor
+    participant ContextDetector
+    participant HyperfocusManager
+    participant Backend
+    participant NotificationBlocker
+    
+    Editor->>ContextDetector: onDidOpenTextDocument
+    ContextDetector->>ContextDetector: analyzeComplexity()
+    ContextDetector->>Backend: getUserProductivityData()
+    Backend->>ContextDetector: peakHours
+    
+    alt Arquivo complexo OU Horário de pico
+        ContextDetector->>HyperfocusManager: activateHyperfocus()
+        HyperfocusManager->>Editor: applyFocusTheme()
+        HyperfocusManager->>Editor: hideDistractions()
+        HyperfocusManager->>NotificationBlocker: blockNotifications()
+        HyperfocusManager->>Backend: logFocusSession()
+    end
+```
+
+Implementação da detecção de contexto:
+
+```typescript
+// context/detector.ts
+export class ContextDetector {
+    private apiClient: ApiClient;
+    
+    constructor(apiClient: ApiClient) {
+        this.apiClient = apiClient;
+    }
+    
+    public initialize(): void {
+        // Monitorar abertura de documentos
+        vscode.workspace.onDidOpenTextDocument(this.analyzeDocument.bind(this));
+        
+        // Monitorar mudança de foco em editores
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor) {
+                this.analyzeDocument(editor.document);
+            }
+        });
+        
+        // Verificar periodicamente o horário
+        setInterval(this.checkProductivityHours.bind(this), 5 * 60 * 1000); // A cada 5 minutos
+    }
+    
+    private async analyzeDocument(document: vscode.TextDocument): Promise<void> {
+        // Ignorar documentos não relevantes
+        if (document.uri.scheme !== 'file' || !this.isCodeFile(document)) {
+            return;
+        }
+        
+        // Analisar complexidade
+        const complexity = this.calculateComplexity(document);
+        
+        // Verificar se está em horário de pico
+        const isPeakTime = await this.checkProductivityHours();
+        
+        // Decidir se deve ativar o modo hiperfoco
+        if (complexity > 500 || isPeakTime) {
+            HyperfocusManager.getInstance().activateHyperfocus({
+                reason: complexity > 500 ? 'complex_file' : 'peak_time',
+                complexity,
+                fileName: document.fileName
+            });
+        }
+    }
+    
+    private calculateComplexity(document: vscode.TextDocument): number {
+        // Implementação básica: contar linhas
+        const lineCount = document.lineCount;
+        
+        // Análise adicional: verificar complexidade ciclomática, aninhamento, etc.
+        // ...
+        
+        return lineCount;
+    }
+    
+    private async checkProductivityHours(): Promise<boolean> {
+        try {
+            const productivityData = await this.apiClient.getUserProductivityData();
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            
+            // Verificar se o horário atual está dentro de um período de pico
+            return productivityData.peakHours.some(period => {
+                const [startHour, startMinute] = period.start.split(':').map(Number);
+                const [endHour, endMinute] = period.end.split(':').map(Number);
+                
+                const startTime = startHour * 60 + startMinute;
+                const endTime = endHour * 60 + endMinute;
+                const currentTime = currentHour * 60 + currentMinute;
+                
+                return currentTime >= startTime && currentTime <= endTime;
+            });
+        } catch (error) {
+            console.error('Erro ao verificar horários produtivos:', error);
+            return false;
+        }
+    }
+    
+    private isCodeFile(document: vscode.TextDocument): boolean {
+        // Lista de extensões de arquivo de código
+        const codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.php', '.c', '.cpp', '.cs', '.go', '.rb', '.swift', '.kt'];
+        const fileName = document.fileName.toLowerCase();
+        return codeExtensions.some(ext => fileName.endsWith(ext));
+    }
+}
+```
+
+Implementação do gerenciador de hiperfoco:
+
+```typescript
+// hyperfocus/manager.ts
+export class HyperfocusManager {
+    private static instance: HyperfocusManager;
+    private apiClient: ApiClient;
+    private active: boolean = false;
+    private sessionStartTime: number = 0;
+    
+    private constructor() {
+        this.apiClient = new ApiClient();
+    }
+    
+    public static getInstance(): HyperfocusManager {
+        if (!HyperfocusManager.instance) {
+            HyperfocusManager.instance = new HyperfocusManager();
+        }
+        return HyperfocusManager.instance;
+    }
+    
+    public async activateHyperfocus(context: HyperfocusContext): Promise<void> {
+        if (this.active) {
+            return;
+        }
+        
+        // Obter configurações do usuário
+        const settings = await this.apiClient.getHyperfocusSettings();
+        
+        // Aplicar tema de foco
+        if (settings.actions.theme) {
+            await vscode.workspace.getConfiguration().update('workbench.colorTheme', settings.actions.theme, true);
+        }
+        
+        // Esconder distrações
+        if (settings.actions.hide_sidebar) {
+            vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
+        }
+        
+        // Bloquear notificações
+        if (settings.actions.block_notifications) {
+            NotificationBlocker.getInstance().blockNotifications();
+        }
+        
+        // Registrar início da sessão
+        this.sessionStartTime = Date.now();
+        this.active = true;
+        
+        // Notificar usuário
+        vscode.window.showInformationMessage(`Modo Hiperfoco ativado: ${context.reason === 'complex_file' ? 'Arquivo complexo detectado' : 'Horário de alta produtividade'}`);
+        
+        // Registrar no backend
+        this.apiClient.logFocusSession({
+            start_time: this.sessionStartTime,
+            trigger: context.reason,
+            file_complexity: context.complexity,
+            file_name: context.fileName
+        });
+        
+        // Configurar timer para verificar periodicamente o estado do usuário
+        this.startFocusMonitoring();
+    }
+    
+    public deactivateHyperfocus(): void {
+        if (!this.active) {
+            return;
+        }
+        
+        // Restaurar configurações
+        vscode.workspace.getConfiguration().update('workbench.colorTheme', undefined, true);
+        
+        // Mostrar sidebar se estava escondida
+        // ...
+        
+        // Desbloquear notificações
+        NotificationBlocker.getInstance().unblockNotifications();
+        
+        // Calcular duração da sessão
+        const sessionDuration = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+        
+        // Registrar fim da sessão no backend
+        this.apiClient.endFocusSession({
+            duration: sessionDuration
+        });
+        
+        this.active = false;
+        
+        // Notificar usuário
+        vscode.window.showInformationMessage(`Modo Hiperfoco desativado. Duração: ${this.formatDuration(sessionDuration)}`);
+    }
+    
+    private startFocusMonitoring(): void {
+        // Verificar a cada 5 minutos se o usuário ainda está ativo
+        setInterval(() => {
+            // Verificar inatividade
+            const idleTime = this.getIdleTime();
+            if (idleTime > 10 * 60 * 1000) { // 10 minutos
+                this.deactivateHyperfocus();
+            }
+        }, 5 * 60 * 1000);
+    }
+    
+    private getIdleTime(): number {
+        // Implementação depende da plataforma
+        // Pode usar extensões nativas ou heurísticas baseadas em eventos do editor
+        return 0; // Placeholder
+    }
+    
+    private formatDuration(seconds: number): string {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${minutes}m`;
+    }
+}
+```
+
+### 3. Fluxo de Rastreamento de Tarefas e Visualização de Progresso
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TaskTracker
+    participant Backend
+    participant TaskVisualizer
+    
+    User->>TaskTracker: Seleciona tarefa atual
+    TaskTracker->>Backend: Obtém subtarefas
+    Backend->>TaskTracker: Lista de subtarefas
+    TaskTracker->>TaskVisualizer: Atualiza barra de progresso
+    
+    loop Para cada subtarefa
+        User->>TaskTracker: Marca subtarefa como concluída
+        TaskTracker->>Backend: Atualiza status
+        Backend->>TaskTracker: Retorna XP ganho
+        TaskTracker->>TaskVisualizer: Atualiza barra (HP: 100% → 0%)
+    end
+```
+
+Implementação do rastreador de tarefas:
+
+```typescript
+// tasks/tracker.ts
+export class TaskTracker {
+    private apiClient: ApiClient;
+    private currentTask: Task | null = null;
+    private statusBarItem: vscode.StatusBarItem;
+    private taskVisualizer: TaskVisualizer;
+    
+    constructor(apiClient: ApiClient) {
+        this.apiClient = apiClient;
+        this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        this.taskVisualizer = new TaskVisualizer();
+    }
+    
+    public initialize(): void {
+        // Registrar comando para selecionar tarefa
+        vscode.commands.registerCommand('tdah-dev-helper.selectTask', this.selectTask.bind(this));
+        
+        // Registrar comando para marcar subtarefa como concluída
+        vscode.commands.registerCommand('tdah-dev-helper.completeSubtask', this.completeSubtask.bind(this));
+        
+        // Exibir status bar
+        this.statusBarItem.command = 'tdah-dev-helper.showTaskDetails';
+        this.statusBarItem.show();
+        
+        // Verificar se há uma tarefa ativa
+        this.loadActiveTask();
+    }
+    
+    private async loadActiveTask(): Promise<void> {
+        try {
+            const activeTask = await this.apiClient.getActiveTask();
+            if (activeTask) {
+                this.currentTask = activeTask;
+                this.updateStatusBar();
+            } else {
+                this.statusBarItem.text = "$(tasklist) Selecionar tarefa";
+            }
+        } catch (error) {
+            console.error('Erro ao carregar tarefa ativa:', error);
+        }
+    }
+    
+    private async selectTask(): Promise<void> {
+        try {
+            // Obter lista de tarefas do usuário
+            const tasks = await this.apiClient.getUserTasks();
+            
+            // Exibir quickpick para seleção
+            const taskItems = tasks.map(task => ({
+                label: task.title,
+                description: `${task.jira_id || ''} - Prioridade: ${task.priority}`,
+                detail: task.description,
+                task
+            }));
+            
+            const selected = await vscode.window.showQuickPick(taskItems, {
+                placeHolder: 'Selecione uma tarefa para trabalhar'
+            });
+            
+            if (selected) {
+                this.currentTask = selected.task;
+                
+                // Verificar se a tarefa já tem subtarefas
+                let subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
+                
+                // Se não tiver subtarefas, oferecer decomposição
+                if (subtasks.length === 0) {
+                    const shouldDecompose = await vscode.window.showInformationMessage(
+                        'Esta tarefa não possui subtarefas. Deseja decompô-la em passos de 15 minutos?',
+                        'Sim', 'Não'
+                    );
+                    
+                    if (shouldDecompose === 'Sim') {
+                        await this.decomposeTask(this.currentTask);
+                        subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
+                    }
+                }
+                
+                // Atualizar visualização
+                this.updateStatusBar();
+                this.taskVisualizer.showTask(this.currentTask, subtasks);
+                
+                // Notificar backend sobre tarefa ativa
+                this.apiClient.setActiveTask(this.currentTask.id);
+            }
+        } catch (error) {
+            console.error('Erro ao selecionar tarefa:', error);
+            vscode.window.showErrorMessage('Erro ao carregar tarefas. Verifique sua conexão.');
+        }
+    }
+    
+    private async decomposeTask(task: Task): Promise<void> {
+        try {
+            vscode.window.showInformationMessage('Decompondo tarefa em subtarefas de 15 minutos...');
+            
+            await this.apiClient.decomposeTask(task.id);
+            
+            vscode.window.showInformationMessage('Tarefa decomposta com sucesso!');
+        } catch (error) {
+            console.error('Erro ao decompor tarefa:', error);
+            vscode.window.showErrorMessage('Erro ao decompor tarefa. Tente novamente.');
+        }
+    }
+    
+    private async completeSubtask(subtaskId: number): Promise<void> {
+        try {
+            // Marcar subtarefa como concluída
+            const result = await this.apiClient.completeSubtask(subtaskId);
+            
+            // Atualizar visualização
+            if (this.currentTask) {
+                const subtasks = await this.apiClient.getSubtasks(this.currentTask.id);
+                this.taskVisualizer.showTask(this.currentTask, subtasks);
+                this.updateStatusBar();
+            }
+            
+            // Mostrar XP ganho
+            if (result.xp_earned > 0) {
+                vscode.window.showInformationMessage(`+${result.xp_earned} XP! Subtarefa concluída.`);
+            }
+            
+            // Verificar se todas as subtarefas foram concluídas
+            if (result.all_completed) {
+                vscode.window.showInformationMessage('Todas as subtarefas concluídas! Tarefa finalizada.');
+                
+                // Oferecer seleção de nova tarefa
+                const shouldSelectNew = await vscode.window.showInformationMessage(
+                    'Deseja selecionar uma nova tarefa?',
+                    'Sim', 'Não'
+                );
+                
+                if (shouldSelectNew === 'Sim') {
+                    this.selectTask();
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao completar subtarefa:', error);
+            vscode.window.showErrorMessage('Erro ao atualizar subtarefa. Tente novamente.');
+        }
+    }
+    
+    private updateStatusBar(): void {
+        if (this.currentTask) {
+            this.statusBarItem.text = `$(tasklist) ${this.currentTask.title}`;
+            this.statusBarItem.tooltip = `Tarefa atual: ${this.currentTask.title}`;
+        } else {
+            this.statusBarItem.text = "$(tasklist) Selecionar tarefa";
+            this.statusBarItem.tooltip = "Clique para selecionar uma tarefa";
+        }
+    }
+}
+```
+
+Implementação do visualizador de tarefas:
+
+```typescript
+// tasks/visualizer.ts
+export class TaskVisualizer {
+    private panel: vscode.WebviewPanel | undefined;
+    
+    public showTask(task: Task, subtasks: Subtask[]): void {
+        // Criar ou mostrar painel
+        if (!this.panel) {
+            this.panel = vscode.window.createWebviewPanel(
+                'taskProgress',
+                'Progresso da Tarefa',
+                vscode.ViewColumn.Beside,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true
+                }
+            );
+            
+            // Lidar com fechamento do painel
+            this.panel.onDidDispose(() => {
+                this.panel = undefined;
+            });
+        }
+        
+        // Calcular progresso
+        const totalSubtasks = subtasks.length;
+        const completedSubtasks = subtasks.filter(s => s.completed).length;
+        const progressPercentage = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+        const remainingPercentage = 100 - progressPercentage;
+        
+        // Gerar HTML
+        this.panel.webview.html = this.generateTaskView(task, subtasks, remainingPercentage);
+        
+        // Configurar mensagens do webview
+        this.panel.webview.onDidReceiveMessage(message => {
+            if (message.command === 'completeSubtask') {
+                vscode.commands.executeCommand('tdah-dev-helper.completeSubtask', message.subtaskId);
+            }
+        });
+    }
+    
+    private generateTaskView(task: Task, subtasks: Subtask[], remainingPercentage: number): string {
+        return `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Progresso da Tarefa</title>
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                        padding: 20px;
+                        color: var(--vscode-foreground);
+                        background-color: var(--vscode-editor-background);
+                    }
+                    h1 {
+                        font-size: 1.5em;
+                        margin-bottom: 10px;
+                    }
+                    .task-info {
+                        margin-bottom: 20px;
+                    }
+                    .progress-container {
+                        width: 100%;
+                        height: 30px;
+                        background-color: #444;
+                        border-radius: 15px;
+                        margin: 20px 0;
+                        overflow: hidden;
+                        position: relative;
+                    }
+                    .progress-bar {
+                        height: 100%;
+                        background: linear-gradient(90deg, #ff6b6b 0%, #ff0000 100%);
+                        border-radius: 15px;
+                        transition: width 0.5s ease;
+                        width: ${remainingPercentage}%;
+                    }
+                    .progress-text {
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        color: white;
+                        font-weight: bold;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+                    }
+                    .subtask-list {
+                        margin-top: 20px;
+                    }
+                    .subtask-item {
+                        padding: 10px;
+                        margin-bottom: 8px;
+                        background-color: var(--vscode-editor-inactiveSelectionBackground);
+                        border-radius: 5px;
+                        display: flex;
+                        align-items: center;
+                    }
+                    .subtask-item.completed {
+                        opacity: 0.7;
+                        text-decoration: line-through;
+                    }
+                    .subtask-checkbox {
+                        margin-right: 10px;
+                    }
+                    .subtask-description {
+                        flex-grow: 1;
+                    }
+                    button {
+                        background-color: var(--vscode-button-background);
+                        color: var(--vscode-button-foreground);
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 3px;
+                        cursor: pointer;
+                    }
+                    button:hover {
+                        background-color: var(--vscode-button-hoverBackground);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="task-info">
+                    <h1>${task.title}</h1>
+                    <div>${task.description || ''}</div>
+                    ${task.jira_id ? `<div>Jira: ${task.jira_id}</div>` : ''}
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar"></div>
+                    <div class="progress-text">HP: ${remainingPercentage}%</div>
+                </div>
+                
+                <div class="subtask-list">
+                    <h2>Microtarefas (15min cada)</h2>
+                    ${subtasks.map(subtask => `
+                        <div class="subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <input type="checkbox" class="subtask-checkbox" ${subtask.completed ? 'checked disabled' : ''} 
+                                   onchange="completeSubtask(${subtask.id})">
+                            <div class="subtask-description">${subtask.description}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <script>
+                    const vscode = acquireVsCodeApi();
+                    
+                    function completeSubtask(subtaskId) {
+                        vscode.postMessage({
+                            command: 'completeSubtask',
+                            subtaskId: subtaskId
+                        });
+                    }
+                </script>
+            </body>
+            </html>
+        `;
+    }
+}
+```
+
+### 4. Fluxo de Bloqueio de Notificações e Integração com Smartwatch
+
+```mermaid
+sequenceDiagram
+    participant VSCode
+    participant NotificationBlocker
+    participant Backend
+    participant Smartwatch
+    
+    VSCode->>NotificationBlocker: Notificação gerada
+    NotificationBlocker->>NotificationBlocker: shouldBlock()
+    
+    alt Notificação bloqueada
+        NotificationBlocker->>Backend: logBlockedNotification()
+    else Notificação crítica
+        NotificationBlocker->>VSCode: Permitir notificação
+        NotificationBlocker->>Backend: sendSmartWatchNotification()
+        Backend->>Smartwatch: Enviar vibração
+    end
+```
+
+Implementação do bloqueador de notificações:
+
+```typescript
+// notifications/blocker.ts
+export class NotificationBlocker {
+    private static instance: NotificationBlocker;
+    private apiClient: ApiClient;
+    private blocking: boolean = false;
+    private originalShowInformationMessage: any;
+    private originalShowWarningMessage: any;
+    private originalShowErrorMessage: any;
+    
+    private constructor() {
+        this.apiClient = new ApiClient();
+    }
+    
+    public static getInstance(): NotificationBlocker {
+        if (!NotificationBlocker.instance) {
+            NotificationBlocker.instance = new NotificationBlocker();
+        }
+        return NotificationBlocker.instance;
+    }
+    
+    public blockNotifications(): void {
+        if (this.blocking) {
+            return;
+        }
+        
+        // Salvar funções originais
+        this.originalShowInformationMessage = vscode.window.showInformationMessage;
+        this.originalShowWarningMessage = vscode.window.showWarningMessage;
+        this.originalShowErrorMessage = vscode.window.showErrorMessage;
+        
+        // Substituir com versões filtradas
+        vscode.window.showInformationMessage = this.filterNotification.bind(this, this.originalShowInformationMessage, 'info');
+        vscode.window.showWarningMessage = this.filterNotification.bind(this, this.originalShowWarningMessage, 'warning');
+        vscode.window.showErrorMessage = this.filterNotification.bind(this, this.originalShowErrorMessage, 'error');
+        
+        this.blocking = true;
+        
+        // Notificar backend
+        this.apiClient.setNotificationBlocking(true);
+    }
+    
+    public unblockNotifications(): void {
+        if (!this.blocking) {
+            return;
+        }
+        
+        // Restaurar funções originais
+        vscode.window.showInformationMessage = this.originalShowInformationMessage;
+        vscode.window.showWarningMessage = this.originalShowWarningMessage;
+        vscode.window.showErrorMessage = this.originalShowErrorMessage;
+        
+        this.blocking = false;
+        
+        // Notificar backend
+        this.apiClient.setNotificationBlocking(false);
+    }
+    
+    private async filterNotification(originalFn: Function, type: string, message: string, ...args: any[]): Promise<any> {
+        // Verificar se deve bloquear
+        if (this.shouldBlock(type, message)) {
+            // Registrar notificação bloqueada
+            this.apiClient.logBlockedNotification({
+                type,
+                message,
+                timestamp: Date.now()
+            });
+            
+            // Retornar Promise resolvida com undefined para simular cancelamento
+            return Promise.resolve(undefined);
+        }
+        
+        // Para notificações críticas, enviar para smartwatch
+        if (type === 'error' || this.isCriticalNotification(message)) {
+            this.sendToSmartwatch(type, message);
+        }
+        
+        // Passar para função original
+        return originalFn.apply(vscode.window, [message, ...args]);
+    }
+    
+    private shouldBlock(type: string, message: string): boolean {
+        // Nunca bloquear erros
+        if (type === 'error') {
+            return false;
+        }
+        
+        // Verificar mensagens relacionadas a git/commits sem testes
+        if (message.toLowerCase().includes('commit') && message.toLowerCase().includes('test')) {
+            return false;
+        }
+        
+        // Bloquear notificações de extensões não críticas
+        const nonCriticalPatterns = [
+            'atualização disponível',
+            'dica:',
+            'novo recurso',
+            'bem-vindo',
+            'estatísticas'
+        ];
+        
+        return nonCriticalPatterns.some(pattern => 
+            message.toLowerCase().includes(pattern.toLowerCase())
+        );
+    }
+    
+    private isCriticalNotification(message: string): boolean {
+        const criticalPatterns = [
+            'erro',
+            'falha',
+            'commit',
+            'teste',
+            'prazo',
+            'deadline',
+            'urgente'
+        ];
+        
+        return criticalPatterns.some(pattern => 
+            message.toLowerCase().includes(pattern.toLowerCase())
+        );
+    }
+    
+    private async sendToSmartwatch(type: string, message: string): Promise<void> {
+        try {
+            // Verificar se integração com smartwatch está ativa
+            const smartwatchEnabled = await this.apiClient.isSmartWatchEnabled();
+            
+            if (smartwatchEnabled) {
+                this.apiClient.sendSmartWatchNotification({
+                    type,
+                    message: message.substring(0, 100), // Limitar tamanho
+                    vibration: type === 'error' ? 'strong' : 'normal'
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao enviar notificação para smartwatch:', error);
+        }
+    }
+}
+```
+
+### 5. Fluxo de Detecção de Commits sem Testes
+
+```mermaid
+sequenceDiagram
+    participant GitWatcher
+    participant VSCode
+    participant Backend
+    participant Smartwatch
+    
+    GitWatcher->>GitWatcher: monitorGitOperations()
+    GitWatcher->>GitWatcher: detectCommitWithoutTests()
+    
+    alt Commit sem testes detectado
+        GitWatcher->>VSCode: showWarning()
+        GitWatcher->>Backend: sendSmartWatchAlert()
+        Backend->>Smartwatch: Enviar vibração tátil
+    end
+```
+
+Implementação do observador de Git:
+
+```typescript
+// utils/git-watcher.ts
+export class GitWatcher {
+    private apiClient: ApiClient;
+    private gitExtension: any;
+    
+    constructor(apiClient: ApiClient) {
+        this.apiClient = apiClient;
+    }
+    
+    public initialize(): void {
+        // Obter extensão Git do VS Code
+        const gitExtension = vscode.extensions.getExtension('vscode.git');
+        if (!gitExtension) {
+            return;
+        }
+        
+        gitExtension.activate().then((extension: any) => {
+            this.gitExtension = extension.getAPI(1);
+            
+            // Monitorar operações Git
+            this.monitorGitOperations();
+        });
+    }
+    
+    private monitorGitOperations(): void {
+        if (!this.gitExtension) {
+            return;
+        }
+        
+        // Monitorar repositórios
+        this.gitExtension.onDidOpenRepository((repository: any) => {
+            // Monitorar pré-commit
+            repository.inputBox.onDidChangeValue((message: string) => {
+                if (message.trim().length > 0) {
+                    this.analyzeCommitMessage(repository, message);
+                }
+            });
+        });
+        
+        // Verificar repositórios já abertos
+        this.gitExtension.repositories.forEach((repository: any) => {
+            repository.inputBox.onDidChangeValue((message: string) => {
+                if (message.trim().length > 0) {
+                    this.analyzeCommitMessage(repository, message);
+                }
+            });
+        });
+    }
+    
+    private async analyzeCommitMessage(repository: any, message: string): Promise<void> {
+        // Verificar se é uma mensagem de commit válida
+        if (message.length < 3 || message.startsWith('Merge') || message.startsWith('Revert')) {
+            return;
+        }
+        
+        // Obter arquivos modificados
+        const changes = repository.state.workingTreeChanges
+            .concat(repository.state.indexChanges);
+        
+        // Verificar se há arquivos de código modificados
+        const codeFiles = changes.filter(change => this.isCodeFile(change.uri.fsPath));
+        if (codeFiles.length === 0) {
+            return;
+        }
+        
+        // Verificar se há arquivos de teste modificados
+        const testFiles = changes.filter(change => this.isTestFile(change.uri.fsPath));
+        
+        // Se há código modificado mas nenhum teste, alertar
+        if (codeFiles.length > 0 && testFiles.length === 0) {
+            // Verificar se o código modificado deveria ter testes
+            const shouldHaveTests = await this.shouldHaveTests(codeFiles);
+            
+            if (shouldHaveTests) {
+                this.warnAboutMissingTests();
+            }
+        }
+    }
+    
+    private isCodeFile(filePath: string): boolean {
+        const codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.php', '.c', '.cpp', '.cs', '.go', '.rb', '.swift', '.kt'];
+        return codeExtensions.some(ext => filePath.toLowerCase().endsWith(ext));
+    }
+    
+    private isTestFile(filePath: string): boolean {
+        const fileName = filePath.toLowerCase();
+        return fileName.includes('test') || 
+               fileName.includes('spec') || 
+               fileName.endsWith('.test.js') || 
+               fileName.endsWith('.test.ts') || 
+               fileName.endsWith('_test.go');
+    }
+    
+    private async shouldHaveTests(codeFiles: any[]): Promise<boolean> {
+        // Lógica para determinar se o código modificado deveria ter testes
+        // Pode usar heurísticas ou consultar o backend
+        
+        // Exemplo simples: verificar se são arquivos de lógica de negócios
+        const businessLogicPatterns = ['service', 'controller', 'model', 'repository', 'manager'];
+        
+        return codeFiles.some(file => 
+            businessLogicPatterns.some(pattern => 
+                file.uri.fsPath.toLowerCase().includes(pattern)
+            )
+        );
+    }
+    
+    private async warnAboutMissingTests(): Promise<void> {
+        // Mostrar alerta no VS Code
+        const action = await vscode.window.showWarningMessage(
+            'Você está prestes a fazer commit de código sem testes associados. Considere adicionar testes antes de continuar.',
+            'Criar Testes', 'Continuar Assim Mesmo'
+        );
+        
+        // Enviar alerta tátil para smartwatch
+        this.apiClient.sendSmartWatchAlert({
+            type: 'commit_without_tests',
+            message: 'Commit sem testes detectado',
+            vibration: 'pattern'
+        });
+        
+        // Registrar evento
+        this.apiClient.logGitEvent({
+            type: 'commit_without_tests',
+            timestamp: Date.now(),
+            user_response: action || 'dismissed'
+        });
+        
+        // Se usuário escolheu criar testes
+        if (action === 'Criar Testes') {
+            // Abrir assistente de criação de testes ou sugerir estrutura
+            vscode.commands.executeCommand('tdah-dev-helper.createTestsAssistant');
+        }
+    }
+}
+```
+
+## Comunicação com o Backend
+
+### Cliente API
+
+```typescript
+// api/client.ts
+export class ApiClient {
+    private baseUrl: string;
+    private token: string | null;
+    
+    constructor(token: string | null = null) {
+        this.baseUrl = 'http://localhost:8000/api'; // URL configurável
+        this.token = token;
+    }
+    
+    public async authenticate(): Promise<User> {
+        // Implementação de autenticação
+        // ...
+        
+        return this.get('/auth/user');
+    }
+    
+    public async getUserTasks(): Promise<Task[]> {
+        return this.get('/tasks');
+    }
+    
+    public async getActiveTask(): Promise<Task | null> {
+        return this.get('/vscode/user-tasks/active');
+    }
+    
+    public async setActiveTask(taskId: number): Promise<void> {
+        return this.post('/vscode/user-tasks/active', { task_id: taskId });
+    }
+    
+    public async getSubtasks(taskId: number): Promise<Subtask[]> {
+        return this.get(`/tasks/${taskId}/subtasks`);
+    }
+    
+    public async decomposeTask(taskId: number): Promise<Subtask[]> {
+        return this.post(`/tasks/${taskId}/decompose`, {});
+    }
+    
+    public async completeSubtask(subtaskId: number): Promise<{ xp_earned: number, all_completed: boolean }> {
+        return this.put(`/subtasks/${subtaskId}/complete`, {});
+    }
+    
+    public async getUserProductivityData(): Promise<ProductivityData> {
+        return this.get('/users/productivity/peak-hours');
+    }
+    
+    public async getHyperfocusSettings(): Promise<HyperfocusSettings> {
+        return this.get('/vscode/hyperfocus-settings');
+    }
+    
+    public async logFocusSession(data: FocusSessionData): Promise<void> {
+        return this.post('/vscode/activity-log', {
+            type: 'focus_session_start',
+            data
+        });
+    }
+    
+    public async endFocusSession(data: { duration: number }): Promise<void> {
+        return this.post('/vscode/activity-log', {
+            type: 'focus_session_end',
+            data
+        });
+    }
+    
+    public async setNotificationBlocking(blocking: boolean): Promise<void> {
+        return this.post('/vscode/activity-log', {
+            type: 'notification_blocking',
+            data: { active: blocking }
+        });
+    }
+    
+    public async logBlockedNotification(data: BlockedNotificationData): Promise<void> {
+        return this.post('/vscode/activity-log', {
+            type: 'notification_blocked',
+            data
+        });
+    }
+    
+    public async isSmartWatchEnabled(): Promise<boolean> {
+        const integrations = await this.get('/integrations');
+        return integrations.some(i => i.type === 'smartwatch' && i.active);
+    }
+    
+    public async sendSmartWatchNotification(data: SmartWatchNotificationData): Promise<void> {
+        return this.post('/integrations/smartwatch/notify', data);
+    }
+    
+    public async sendSmartWatchAlert(data: SmartWatchAlertData): Promise<void> {
+        return this.post('/integrations/smartwatch/alert', data);
+    }
+    
+    public async logGitEvent(data: GitEventData): Promise<void> {
+        return this.post('/vscode/activity-log', {
+            type: 'git_event',
+            data
+        });
+    }
+    
+    // Métodos HTTP genéricos
+    private async get(endpoint: string): Promise<any> {
+        return this.request('GET', endpoint);
+    }
+    
+    private async post(endpoint: string, data: any): Promise<any> {
+        return this.request('POST', endpoint, data);
+    }
+    
+    private async put(endpoint: string, data: any): Promise<any> {
+        return this.request('PUT', endpoint, data);
+    }
+    
+    private async request(method: string, endpoint: string, data?: any): Promise<any> {
+        const url = `${this.baseUrl}${endpoint}`;
+        
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`;
+        }
+        
+        const options: RequestInit = {
+            method,
+            headers,
+            body: data ? JSON.stringify(data) : undefined
+        };
+        
+        try {
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status} ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error(`API request failed: ${method} ${endpoint}`, error);
+            throw error;
+        }
+    }
+}
+```
+
+## Interfaces de Dados
+
+```typescript
+// api/models.ts
+export interface User {
+    id: number;
+    name: string;
+    email: string;
+    xp_points: number;
+    level: number;
+    preferences: UserPreferences;
+}
+
+export interface UserPreferences {
+    theme: string;
+    notifications: {
+        block_during_focus: boolean;
+        smartwatch_enabled: boolean;
+    };
+    focus: {
+        file_complexity_threshold: number;
+        auto_activate: boolean;
+    };
+}
+
+export interface Task {
+    id: number;
+    title: string;
+    description: string;
+    jira_id: string | null;
+    priority: string;
+    due_date: string | null;
+    status: string;
+}
+
+export interface Subtask {
+    id: number;
+    task_id: number;
+    description: string;
+    duration: number;
+    completed: boolean;
+    order_position: number;
+}
+
+export interface ProductivityData {
+    peakHours: Array<{
+        start: string;
+        end: string;
+    }>;
+    focusTime: {
+        daily: number;
+        weekly: number;
+    };
+    tasksCompleted: {
+        daily: number;
+        weekly: number;
+    };
+}
+
+export interface HyperfocusSettings {
+    enabled: boolean;
+    triggers: {
+        file_complexity_threshold: number;
+        peak_hours: Array<{
+            start: string;
+            end: string;
+        }>;
+    };
+    actions: {
+        block_notifications: boolean;
+        theme: string;
+        hide_sidebar: boolean;
+    };
+}
+
+export interface FocusSessionData {
+    start_time: number;
+    trigger: string;
+    file_complexity?: number;
+    file_name?: string;
+}
+
+export interface BlockedNotificationData {
+    type: string;
+    message: string;
+    timestamp: number;
+}
+
+export interface SmartWatchNotificationData {
+    type: string;
+    message: string;
+    vibration: 'normal' | 'strong' | 'pattern';
+}
+
+export interface SmartWatchAlertData {
+    type: string;
+    message: string;
+    vibration: string;
+}
+
+export interface GitEventData {
+    type: string;
+    timestamp: number;
+    user_response?: string;
+}
+
+export interface HyperfocusContext {
+    reason: 'complex_file' | 'peak_time';
+    complexity?: number;
+    fileName?: string;
+}
+```
+
+## Configuração da Extensão
+
+```json
+// package.json
+{
+  "name": "tdah-dev-helper",
+  "displayName": "TDAH Dev Helper",
+  "description": "Assistente de produtividade para desenvolvedores com TDAH",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tdah-dev-helper.startFocus",
+        "title": "TDAH: Iniciar Modo Hiperfoco"
+      },
+      {
+        "command": "tdah-dev-helper.stopFocus",
+        "title": "TDAH: Parar Modo Hiperfoco"
+      },
+      {
+        "command": "tdah-dev-helper.showDashboard",
+        "title": "TDAH: Mostrar Dashboard"
+      },
+      {
+        "command": "tdah-dev-helper.selectTask",
+        "title": "TDAH: Selecionar Tarefa"
+      },
+      {
+        "command": "tdah-dev-helper.decomposeTask",
+        "title": "TDAH: Decompor Tarefa em Subtarefas"
+      },
+      {
+        "command": "tdah-dev-helper.createTestsAssistant",
+        "title": "TDAH: Assistente de Criação de Testes"
+      }
+    ],
+    "configuration": {
+      "title": "TDAH Dev Helper",
+      "properties": {
+        "tdahDevHelper.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000/api",
+          "description": "URL da API do backend"
+        },
+        "tdahDevHelper.hyperfocus.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ativar modo hiperfoco automaticamente"
+        },
+        "tdahDevHelper.hyperfocus.fileComplexityThreshold": {
+          "type": "number",
+          "default": 500,
+          "description": "Limite de complexidade de arquivo para ativar modo hiperfoco"
+        },
+        "tdahDevHelper.notifications.blockDuringFocus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Bloquear notificações durante modo hiperfoco"
+        },
+        "tdahDevHelper.smartwatch.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ativar integração com smartwatch"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "test-compile": "tsc -p ./",
+    "test-watch": "tsc -watch -p ./",
+    "pretest": "npm run test-compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/glob": "^7.1.3",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "14.x",
+    "eslint": "^7.27.0",
+    "@typescript-eslint/eslint-plugin": "^4.26.0",
+    "@typescript-eslint/parser": "^4.26.0",
+    "glob": "^7.1.7",
+    "mocha": "^8.4.0",
+    "typescript": "^4.3.2",
+    "vscode-test": "^1.5.2",
+    "ts-loader": "^9.2.2",
+    "webpack": "^5.38.1",
+    "webpack-cli": "^4.7.0"
+  }
+}
+```
+
+## Considerações de UX para TDAH
+
+1. **Interface Visual Simplificada**
+   - Uso de cores contrastantes para destacar informações importantes
+   - Barra de progresso estilo RPG para feedback visual imediato
+   - Ícones intuitivos e consistentes
+
+2. **Redução de Distrações**
+   - Modo hiperfoco que esconde elementos não essenciais da interface
+   - Bloqueio inteligente de notificações não críticas
+   - Tema de alto contraste para melhorar o foco
+
+3. **Feedback Imediato**
+   - Notificações visuais e táteis para ações importantes
+   - Animações sutis para indicar progresso
+   - Celebração de conquistas (XP, níveis) com feedback visual
+
+4. **Estruturação de Tarefas**
+   - Decomposição automática em microtarefas de 15 minutos
+   - Visualização clara do progresso atual
+   - Priorização automática baseada em contexto
+
+5. **Acessibilidade**
+   - Suporte a temas de alto contraste para dislexia
+   - Opções de personalização para diferentes necessidades
+   - Comandos de teclado para todas as funcionalidades
+
+## Testes e Validação
+
+1. **Testes Unitários**
+   - Cobertura de testes para lógica de detecção de contexto
+   - Testes para bloqueio de notificações
+   - Validação de integração com API
+
+2. **Testes de Integração**
+   - Comunicação com backend
+   - Integração com API do VS Code
+   - Fluxos completos de usuário
+
+3. **Testes de Usabilidade**
+   - Feedback de desenvolvedores com TDAH
+   - Avaliação de eficácia do modo hiperfoco
+   - Validação da decomposição de tarefas
+
+## Próximos Passos
+
+1. **Implementação do Código**
+   - Desenvolvimento da estrutura base da extensão
+   - Implementação dos módulos principais
+   - Integração com backend
+
+2. **Testes e Validação**
+   - Testes unitários e de integração
+   - Validação com usuários reais
+
+3. **Publicação**
+   - Empacotamento da extensão
+   - Publicação no VS Code Marketplace
+   - Documentação para usuários

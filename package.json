@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "@storybook/addon-interactions": "^8.6.14"
+  }
+}

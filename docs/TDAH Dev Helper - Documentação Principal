@@ -1,0 +1,748 @@
+# TDAH Dev Helper - Documentação Principal
+
+## Visão Geral do Projeto
+
+O TDAH Dev Helper é um sistema completo projetado para ajudar desenvolvedores com TDAH a aumentar sua produtividade e foco. Combinando microtarefas contextuais, modo hiperfoco inteligente e gamificação com recompensas tangíveis, o sistema se adapta às necessidades específicas de pessoas com TDAH no ambiente de desenvolvimento.
+
+### Componentes Principais
+
+1. **Backend API (Laravel/PHP)**: Gerencia dados, integrações e lógica de negócios
+2. **Frontend Web (React/Next.js)**: Interface para visualização e configuração
+3. **Extensão VS Code (TypeScript)**: Integração direta com o ambiente de desenvolvimento
+4. **Banco de Dados (MySQL)**: Armazenamento persistente de dados
+
+### Funcionalidades Essenciais
+
+- **Sistema de Microtarefas**: Quebra tickets do Jira em passos de 15 minutos
+- **Modo Hiperfoco**: Ativação automática baseada em contexto
+- **Gamificação**: Sistema de XP, níveis e recompensas tangíveis
+- **Priorização Inteligente**: Análise de Git, Jira e horários produtivos
+
+## Índice da Documentação
+
+1. [Análise de Requisitos](#análise-de-requisitos)
+2. [Arquitetura do Sistema](#arquitetura-do-sistema)
+3. [Banco de Dados](#banco-de-dados)
+4. [API REST](#api-rest)
+5. [Extensão VS Code](#extensão-vs-code)
+6. [Gamificação e Recompensas](#gamificação-e-recompensas)
+7. [Priorização de Tasks](#priorização-de-tasks)
+8. [Validação de Critérios](#validação-de-critérios)
+9. [Guia Rápido (Cheat Sheet)](#guia-rápido)
+10. [Próximos Passos](#próximos-passos)
+
+## Análise de Requisitos
+
+### Contexto Técnico
+- **Backend:** PHP 8.3/Laravel 11 (API REST)
+- **Frontend:** React 19 + Next.js 14 (Painel Web)
+- **Banco de Dados:** MySQL 8.0
+- **Extensão VS Code:** TypeScript + VSCode API
+
+### Requisitos Essenciais
+
+#### 1. Sistema de Microtarefas Contextuais
+- Quebra tickets do Jira em passos de 15min
+- Exibe progresso como barra de RPG (HP: 100% → 0%)
+- Integração com OpenAI para decomposição automática
+
+#### 2. Modo Hiperfoco Inteligente
+- Ativação automática baseada em:
+  - Complexidade de arquivo (>500 linhas)
+  - Horários históricos de produtividade
+- Bloqueio de distrações e notificações
+
+#### 3. Gamificação com Recompensas Tangíveis
+- Sistema de XP e níveis progressivos
+- Recompensas desbloqueáveis (temas, recursos, cursos)
+- Feedback visual imediato para reforço positivo
+
+#### 4. Priorização Inteligente de Tasks
+- Análise de histórico de commits do Git
+- Integração com prazos do Jira
+- Adaptação a horários de produtividade
+- Algoritmos de Monte Carlo para previsão de tempo
+
+### User Stories Críticas
+
+#### Como usuário com TDAH:
+- Bloqueio de notificações durante sessões de codificação
+- Lembretes táteis (smartwatch) para commits sem testes
+- Visualização de progresso diário em formato visual simples
+
+#### Como tech lead:
+- Relatórios semanais de produtividade da equipe
+- Integração nativa com GitLab/GitHub
+- Personalização de níveis de gamificação
+
+[Documentação completa de requisitos](/home/ubuntu/projeto_tdah/docs/analise_requisitos.md)
+
+## Arquitetura do Sistema
+
+### Visão Geral da Arquitetura
+
+O sistema utiliza uma arquitetura distribuída com quatro componentes principais:
+
+1. **Backend API (Laravel/PHP)**
+2. **Frontend Web (React/Next.js)**
+3. **Extensão VS Code (TypeScript)**
+4. **Banco de Dados (MySQL)**
+
+Além de integrações com serviços externos:
+- Jira API
+- GitHub/GitLab API
+- OpenAI API
+- APIs de Smartwatch
+
+### Diagrama de Arquitetura
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  VS Code        │◄────┤  Backend API    │◄────┤  Frontend Web   │
+│  Extension      │     │  (Laravel)      │     │  (React/Next.js)│
+│                 │     │                 │     │                 │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │
+         │                       │
+         │               ┌───────▼───────┐
+         │               │               │
+         └───────────────►   MySQL DB    │
+                         │               │
+                         └───────┬───────┘
+                                 │
+                     ┌───────────┴───────────┐
+                     │                       │
+          ┌──────────▼──┐     ┌─────────────┐│    ┌─────────────┐
+          │             │     │             ││    │             │
+          │  Jira API   │     │ GitHub/     ││    │  OpenAI     │
+          │             │     │ GitLab API  ││    │  API        │
+          └─────────────┘     └─────────────┘│    └─────────────┘
+                              └──────────────┘
+```
+
+### Fluxos Principais
+
+1. **Decomposição de Tarefas**: Usuário → Frontend/VS Code → Backend → OpenAI → DB
+2. **Modo Hiperfoco**: VS Code → Detecção de contexto → Ativação → Bloqueio de notificações
+3. **Gamificação**: Ações do usuário → Backend → Cálculo de XP → Atualização de nível
+4. **Priorização**: Git/Jira → Backend → Algoritmo Monte Carlo → Cronograma
+
+[Documentação completa de arquitetura](/home/ubuntu/projeto_tdah/docs/arquitetura_sistema.md)
+
+## Banco de Dados
+
+### Diagrama Entidade-Relacionamento
+
+```
+┌───────────────┐       ┌───────────────┐       ┌───────────────┐
+│    Users      │       │    Tasks      │       │  Subtasks     │
+├───────────────┤       ├───────────────┤       ├───────────────┤
+│ id            │       │ id            │       │ id            │
+│ name          │       │ title         │       │ task_id       │
+│ email         │◄──────┤ user_id       │◄──────┤ description   │
+│ password      │       │ jira_id       │       │ duration      │
+│ xp_points     │       │ description   │       │ completed     │
+│ level         │       │ priority      │       │ order         │
+│ preferences   │       │ due_date      │       │ created_at    │
+│ created_at    │       │ status        │       │ updated_at    │
+│ updated_at    │       │ created_at    │       └───────────────┘
+└───────┬───────┘       │ updated_at    │
+        │               └───────┬───────┘
+        │                       │
+        │               ┌───────▼───────┐
+        │               │ ActivityLogs  │
+        └───────────────┤               │
+                        │ id            │
+                        │ user_id       │
+                        │ task_id       │
+                        │ action_type   │
+                        │ details       │
+                        │ created_at    │
+                        └───────────────┘
+```
+
+### Principais Tabelas
+
+1. **Users**: Informações dos usuários, XP, nível e preferências
+2. **Tasks**: Tarefas importadas do Jira
+3. **Subtasks**: Microtarefas de 15 minutos
+4. **ActivityLogs**: Registro de atividades para XP e análise
+5. **Rewards**: Sistema de recompensas por nível
+6. **ProductivityMetrics**: Métricas de produtividade
+7. **Integrations**: Configurações de integração com serviços externos
+
+[Documentação completa do banco de dados](/home/ubuntu/projeto_tdah/docs/modelagem_banco_dados.md)
+
+## API REST
+
+### Endpoints Principais
+
+#### Autenticação
+```
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/logout
+```
+
+#### Tarefas e Microtarefas
+```
+GET /api/tasks
+POST /api/tasks/{id}/decompose
+GET /api/tasks/{taskId}/subtasks
+PUT /api/subtasks/{id}/complete
+```
+
+#### Gamificação
+```
+GET /api/users/{id}/xp
+POST /api/users/{id}/xp/add
+GET /api/users/{id}/rewards
+```
+
+#### Priorização
+```
+POST /api/tasks/prioritize
+GET /api/tasks/schedule
+PUT /api/tasks/schedule/reorder
+```
+
+#### Extensão VS Code
+```
+POST /api/vscode/context-update
+GET /api/vscode/hyperfocus-settings
+POST /api/vscode/activity-log
+```
+
+### Exemplo de Endpoint de Decomposição
+
+```php
+Route::post('/tasks/{id}/decompose', function (Request $request, $id) {
+    $task = Task::findOrFail($id);
+    
+    $result = OpenAI::chat()->create([
+        'model' => 'gpt-4o',
+        'messages' => [[
+            'role' => 'user',
+            'content' => "Quebre esta task em subtarefas de 15min: {$task->description}"
+        ]]
+    ]);
+    
+    $subtasks = json_decode($result->choices[0]->message->content);
+    
+    // Salvar subtarefas no banco de dados
+    foreach ($subtasks as $index => $subtaskDescription) {
+        Subtask::create([
+            'task_id' => $task->id,
+            'description' => $subtaskDescription,
+            'duration' => 15,
+            'order_position' => $index + 1
+        ]);
+    }
+    
+    return response()->json([
+        'success' => true,
+        'subtasks' => $task->subtasks()->orderBy('order_position')->get()
+    ]);
+});
+```
+
+[Documentação completa da API REST](/home/ubuntu/projeto_tdah/docs/endpoints_api.md)
+
+## Extensão VS Code
+
+### Estrutura da Extensão
+
+```
+tdah-dev-helper/
+├── src/
+│   ├── extension.ts          # Ponto de entrada principal
+│   ├── api/                  # Comunicação com o backend
+│   ├── context/              # Detecção de contexto
+│   ├── hyperfocus/           # Modo hiperfoco
+│   ├── notifications/        # Bloqueio de notificações
+│   ├── tasks/                # Rastreamento de tarefas
+│   ├── gamification/         # Sistema de XP
+│   └── utils/                # Utilitários
+├── media/                    # Recursos visuais
+└── package.json              # Manifesto da extensão
+```
+
+### Fluxos Principais
+
+#### Detecção de Contexto e Ativação do Modo Hiperfoco
+
+```typescript
+// context/detector.ts
+export class ContextDetector {
+    // ...
+    
+    private async analyzeDocument(document: vscode.TextDocument): Promise<void> {
+        // Ignorar documentos não relevantes
+        if (document.uri.scheme !== 'file' || !this.isCodeFile(document)) {
+            return;
+        }
+        
+        // Analisar complexidade
+        const complexity = this.calculateComplexity(document);
+        
+        // Verificar se está em horário de pico
+        const isPeakTime = await this.checkProductivityHours();
+        
+        // Decidir se deve ativar o modo hiperfoco
+        if (complexity > 500 || isPeakTime) {
+            HyperfocusManager.getInstance().activateHyperfocus({
+                reason: complexity > 500 ? 'complex_file' : 'peak_time',
+                complexity,
+                fileName: document.fileName
+            });
+        }
+    }
+    
+    // ...
+}
+```
+
+#### Visualização de Progresso Estilo RPG
+
+```typescript
+// tasks/visualizer.ts
+export class TaskVisualizer {
+    // ...
+    
+    private generateTaskView(task: Task, subtasks: Subtask[], remainingPercentage: number): string {
+        return `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <!-- ... -->
+            </head>
+            <body>
+                <div class="task-info">
+                    <h1>${task.title}</h1>
+                    <!-- ... -->
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar"></div>
+                    <div class="progress-text">HP: ${remainingPercentage}%</div>
+                </div>
+                
+                <div class="subtask-list">
+                    <h2>Microtarefas (15min cada)</h2>
+                    ${subtasks.map(subtask => `
+                        <div class="subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <input type="checkbox" class="subtask-checkbox" ${subtask.completed ? 'checked disabled' : ''} 
+                                   onchange="completeSubtask(${subtask.id})">
+                            <div class="subtask-description">${subtask.description}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <script>
+                    // ...
+                </script>
+            </body>
+            </html>
+        `;
+    }
+    
+    // ...
+}
+```
+
+[Documentação completa da extensão VS Code](/home/ubuntu/projeto_tdah/docs/extensao_vscode.md)
+
+## Gamificação e Recompensas
+
+### Sistema de XP
+
+| Atividade | XP Base | Multiplicadores |
+|-----------|---------|-----------------|
+| Completar subtarefa (15min) | 10 XP | x1.5 durante hiperfoco |
+| Completar tarefa inteira | 50 XP | x1.2 se antes do prazo |
+| Commit com testes | 15 XP | x2 para cobertura >80% |
+| Sessão de hiperfoco | 5 XP/15min | x1.3 em horário de pico |
+| Streak diária | 25 XP | +5 XP por dia consecutivo |
+
+### Sistema de Níveis
+
+| Nível | XP Necessário | XP Total | Título |
+|-------|---------------|----------|--------|
+| 1 | 0 | 0 | Novato |
+| 2 | 100 | 100 | Iniciante |
+| 5 | 250 | 700 | Desenvolvedor Experiente |
+| 10 | 500 | 2700 | Arquiteto |
+
+### Recompensas Tangíveis
+
+| Nível | Recompensa | Descrição |
+|-------|------------|-----------|
+| 1 | Tema Dark "Matrix" | Tema visual de alto contraste inspirado em Matrix |
+| 5 | Acesso Beta Features | Acesso antecipado a novos recursos |
+| 10 | Curso de Laravel Grátis | Curso completo de Laravel |
+
+### Visualização de Progresso
+
+```jsx
+// HPProgressBar.jsx
+import React from 'react';
+import { motion } from 'framer-motion';
+
+const HPProgressBar = ({ task, subtasks }) => {
+  // Calcular HP restante
+  const totalSubtasks = subtasks.length;
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const hpPercentage = totalSubtasks > 0 
+    ? Math.round(((totalSubtasks - completedSubtasks) / totalSubtasks) * 100) 
+    : 100;
+  
+  // Determinar cor baseada no HP
+  const getHPColor = (hp) => {
+    if (hp > 70) return '#ff6b6b'; // Vermelho para HP alto
+    if (hp > 30) return '#ffb347'; // Laranja para HP médio
+    return '#4cd137';              // Verde para HP baixo
+  };
+  
+  return (
+    <div className="task-hp-container">
+      <div className="task-info">
+        <h3>{task.title}</h3>
+        <span className="hp-text">{hpPercentage}% HP</span>
+      </div>
+      
+      <div className="hp-bar-container">
+        <motion.div 
+          className="hp-bar"
+          initial={{ width: '100%' }}
+          animate={{ width: `${hpPercentage}%` }}
+          style={{ backgroundColor: getHPColor(hpPercentage) }}
+          transition={{ duration: 0.5 }}
+        />
+      </div>
+      
+      {hpPercentage === 0 && (
+        <motion.div 
+          className="task-completed-effect"
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          Tarefa Concluída! +{task.xpReward} XP
+        </motion.div>
+      )}
+    </div>
+  );
+};
+```
+
+[Documentação completa de gamificação](/home/ubuntu/projeto_tdah/docs/gamificacao_recompensas.md)
+
+## Priorização de Tasks
+
+### Fontes de Dados
+
+1. **Histórico de Commits do Git**
+   - Padrões de produtividade
+   - Complexidade de código
+   - Tempo de conclusão
+
+2. **Prazos e Prioridades do Jira**
+   - Datas de entrega
+   - Níveis de importância
+   - Dependências entre tarefas
+
+3. **Horários de Produtividade**
+   - Métricas históricas
+   - Sessões de hiperfoco
+   - Preferências do usuário
+
+4. **Algoritmo de Monte Carlo**
+   - Estimativas realistas
+   - Intervalos de confiança
+   - Análise de riscos
+
+### Interface Visual Interativa
+
+```jsx
+// TaskSchedule.jsx
+import React, { useState, useEffect } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { TimeSlot } from './TimeSlot';
+import { TaskCard } from './TaskCard';
+import { ConfidenceIndicator } from './ConfidenceIndicator';
+
+const TaskSchedule = ({ schedule, onScheduleUpdate }) => {
+  const [tasks, setTasks] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // ...
+  
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      // Encontrar índices
+      const oldIndex = timeSlots.findIndex(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}` === active.id);
+      const newIndex = timeSlots.findIndex(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}` === over.id);
+      
+      // Mover slot
+      const newSlots = arrayMove(timeSlots, oldIndex, newIndex);
+      setTimeSlots(newSlots);
+      
+      // Reconstruir tarefas com novos slots
+      // ...
+      
+      onScheduleUpdate({
+        ...schedule,
+        tasks: updatedTasks
+      });
+    }
+  };
+  
+  // ...
+  
+  return (
+    <div className="task-schedule">
+      <div className="schedule-header">
+        <button onClick={() => handleDateChange(-1)}>◀ Anterior</button>
+        <h2>{currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+        <button onClick={() => handleDateChange(1)}>Próximo ▶</button>
+      </div>
+      
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={currentSlots.map(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}`)} strategy={verticalListSortingStrategy}>
+          {currentSlots.map(slot => (
+            <TimeSlot
+              key={`slot-${slot.task_id}-${slot.date}-${slot.start}`}
+              id={`slot-${slot.task_id}-${slot.date}-${slot.start}`}
+              startPosition={startPosition}
+              duration={slot.duration}
+              task={task}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+      
+      <div className="task-list">
+        <h3>Tarefas do Dia</h3>
+        {tasks
+          .filter(task => task.time_slots.some(slot => slot.date === currentDateStr))
+          .map(task => (
+            <TaskCard 
+              key={task.id} 
+              task={task}
+              timeSlots={task.time_slots.filter(slot => slot.date === currentDateStr)}
+            >
+              <ConfidenceIndicator confidence={task.confidence} />
+            </TaskCard>
+          ))
+        }
+      </div>
+    </div>
+  );
+};
+```
+
+[Documentação completa de priorização](/home/ubuntu/projeto_tdah/docs/priorizacao_tasks.md)
+
+## Validação de Critérios
+
+### 1. Testes Unitários (Cobertura de 80% do código PHP)
+
+```php
+// tests/Unit/Services/GamificationServiceTest.php
+<?php
+
+namespace Tests\Unit\Services;
+
+use App\Models\User;
+use App\Models\Reward;
+use App\Services\GamificationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class GamificationServiceTest extends TestCase
+{
+    use RefreshDatabase;
+    
+    protected $gamificationService;
+    
+    public function setUp(): void
+    {
+        parent::setUp();
+        $this->gamificationService = new GamificationService();
+    }
+    
+    public function testAddXP()
+    {
+        // Arrange
+        $user = User::factory()->create([
+            'xp_points' => 0,
+            'level' => 1
+        ]);
+        
+        // Act
+        $result = $this->gamificationService->addXP($user, 100, 'test_source');
+        
+        // Assert
+        $this->assertEquals(100, $result['xp_earned']);
+        $this->assertEquals(100, $result['total_xp']);
+        $this->assertEquals(1, $result['old_level']);
+        $this->assertEquals(2, $result['new_level']);
+        $this->assertTrue($result['level_up']);
+        
+        // Verificar se o usuário foi atualizado no banco
+        $this->assertEquals(100, $user->fresh()->xp_points);
+        $this->assertEquals(2, $user->fresh()->level);
+    }
+    
+    // ...
+}
+```
+
+### 2. Performance (Latência <500ms)
+
+- **Laravel Octane com Swoole**
+- **Otimização de Consultas**
+- **Implementação de Cache**
+- **Processamento Assíncrono**
+
+### 3. Acessibilidade (Temas de Alto Contraste)
+
+```scss
+// Tema de alto contraste (claro)
+.theme-high-contrast-light {
+  --background-primary: #ffffff;
+  --background-secondary: #f0f0f0;
+  --text-primary: #000000;
+  --text-secondary: #333333;
+  --accent-color: #0000ff;
+  --border-color: #000000;
+  --success-color: #006600;
+  --warning-color: #cc6600;
+  --danger-color: #cc0000;
+  --card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
+  
+  --letter-spacing: 0.05em;
+  --line-height: 1.8;
+}
+
+// Tema de alto contraste (escuro)
+.theme-high-contrast-dark {
+  --background-primary: #000000;
+  --background-secondary: #222222;
+  --text-primary: #ffffff;
+  --text-secondary: #dddddd;
+  --accent-color: #00ffff;
+  --border-color: #ffffff;
+  --success-color: #00ff00;
+  --warning-color: #ffcc00;
+  --danger-color: #ff0000;
+  --card-shadow: 0 0.125rem 0.25rem rgba(255, 255, 255, 0.2);
+  
+  --letter-spacing: 0.05em;
+  --line-height: 1.8;
+}
+
+// Tema Matrix (para recompensa de nível 1)
+.theme-matrix {
+  --background-primary: #000000;
+  --background-secondary: #0a0a0a;
+  --text-primary: #00ff00;
+  --text-secondary: #00cc00;
+  --accent-color: #00ffff;
+  --border-color: #00aa00;
+  --success-color: #00ff00;
+  --warning-color: #ffcc00;
+  --danger-color: #ff0000;
+  --card-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+  
+  --font-family: 'Courier New', monospace;
+  --letter-spacing: 0.05em;
+  --line-height: 1.6;
+}
+
+// Suporte a dislexia
+.dyslexia-friendly {
+  --font-family: 'OpenDyslexic', sans-serif;
+  --letter-spacing: 0.1em;
+  --line-height: 2;
+}
+```
+
+### 4. Documentação ADHD-friendly
+
+- **Vídeos curtos** (2-3 minutos)
+- **Cheat sheets** visuais
+- **Documentação estruturada**
+
+[Documentação completa de validação](/home/ubuntu/projeto_tdah/docs/validacao_criterios.md)
+
+## Guia Rápido
+
+### Atalhos da Extensão VS Code
+
+| Comando | Ação |
+|---------|------|
+| Ctrl+Shift+F | Ativar/Desativar modo hiperfoco |
+| Ctrl+Shift+T | Mostrar tarefas atuais |
+| Ctrl+Shift+D | Decompor tarefa selecionada |
+| Ctrl+Shift+P | Mostrar cronograma de priorização |
+
+### Fluxo de Trabalho Recomendado
+
+1. Inicie o dia verificando o **cronograma priorizado**
+2. Selecione a primeira tarefa do cronograma
+3. Decomponha a tarefa em subtarefas de 15 minutos
+4. Ative o **modo hiperfoco** para começar a trabalhar
+5. Complete as subtarefas uma por uma
+6. Faça pausas curtas entre as subtarefas
+7. Ao finalizar, marque a tarefa como concluída para ganhar XP
+
+### Sistema de XP e Níveis
+
+| Atividade | XP |
+|-----------|-----|
+| Subtarefa | +10 XP |
+| Tarefa completa | +50 XP |
+| Commit com testes | +15 XP |
+| Hiperfoco (15min) | +5 XP |
+| Streak diária | +25 XP |
+
+### Dicas para Produtividade
+
+- Use o **modo hiperfoco** para tarefas complexas
+- Decomponha tarefas grandes em subtarefas de 15 minutos
+- Faça commits frequentes com testes para ganhar mais XP
+- Verifique seu cronograma priorizado no início de cada dia
+- Mantenha uma streak diária para multiplicadores de XP
+
+## Próximos Passos
+
+1. **Implementação do Backend**
+   - Configuração do ambiente Laravel
+   - Implementação dos endpoints da API
+   - Configuração do banco de dados
+
+2. **Desenvolvimento do Frontend**
+   - Criação da interface React/Next.js
+   - Implementação dos componentes visuais
+   - Integração com a API
+
+3. **Desenvolvimento da Extensão VS Code**
+   - Implementação da detecção de contexto
+   - Desenvolvimento do modo hiperfoco
+   - Integração com o backend
+
+4. **Testes e Validação**
+   - Testes unitários e de integração
+   - Validação com usuários reais
+   - Ajustes de performance e acessibilidade
+
+5. **Implantação e Monitoramento**
+   - Publicação da extensão no VS Code Marketplace
+   - Implantação do backend e frontend
+   - Monitoramento de uso e feedback

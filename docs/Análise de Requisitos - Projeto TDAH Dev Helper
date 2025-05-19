@@ -1,0 +1,114 @@
+# Análise de Requisitos - Projeto TDAH Dev Helper
+
+## Contexto Técnico
+- **Backend:** PHP 8.3/Laravel 11 (API REST)
+- **Frontend:** React 19 + Next.js 14 (Painel Web)
+- **Banco de Dados:** MySQL 8.0
+- **Extensão VS Code:** TypeScript + VSCode API
+
+## Requisitos Essenciais
+
+### 1. Sistema de Microtarefas Contextuais
+- Funcionalidade para quebrar tickets do Jira em passos menores de 15 minutos
+- Visualização de progresso em formato de barra de RPG (HP: 100% → 0%)
+- Integração com API do OpenAI para decomposição automática de tarefas
+- Endpoint Laravel para processamento das decomposições
+
+### 2. Modo Hiperfoco Inteligente
+- Ativação automática baseada em contexto:
+  - Detecção de arquivos complexos (>500 linhas)
+  - Análise de horários históricos de maior produtividade
+- Implementação via extensão VS Code com acesso ao workspace
+- Personalização de gatilhos de ativação
+
+### 3. Gamificação com Recompensas Tangíveis
+- Sistema de níveis e XP
+- Recompensas progressivas por nível alcançado:
+  - Nível 1 (100 XP): Tema Dark "Matrix"
+  - Nível 5 (500 XP): Acesso a Beta Features
+  - Nível 10 (1500 XP): Curso de Laravel Grátis
+- Mecanismo de tracking de atividades para atribuição de XP
+
+### 4. Sistema de Priorização de Tasks
+- Análise de histórico de commits do Git
+- Integração com prazos do Jira
+- Adaptação aos horários de produtividade do usuário
+- Implementação de algoritmos de Monte Carlo para previsão de tempo
+- Interface visual interativa com drag-and-drop para cronograma
+
+## User Stories Críticas
+
+### Como usuário com TDAH:
+1. **Bloqueio de Distrações**
+   - Bloqueio automático de notificações durante sessões de codificação intensa
+   - Detecção de contexto para ativação/desativação do bloqueio
+   - Configuração personalizada de tipos de notificações a bloquear
+
+2. **Lembretes Táteis**
+   - Integração com smartwatch para alertas táteis
+   - Detecção de commits sem testes associados
+   - Sistema de verificação de cobertura de testes antes de commits
+
+3. **Visualização de Progresso**
+   - Dashboard visual simplificado de progresso diário
+   - Métricas adaptadas para fácil compreensão
+   - Visualizações personalizáveis conforme preferência do usuário
+
+### Como tech lead:
+1. **Relatórios de Produtividade**
+   - Geração automática de relatórios semanais
+   - Métricas de produtividade da equipe
+   - Visualizações comparativas e tendências
+
+2. **Integração com Git**
+   - Conexão nativa com GitLab/GitHub
+   - Análise de padrões de commit e contribuição
+   - Correlação entre commits e tarefas do Jira
+
+3. **Personalização de Gamificação**
+   - Interface para configuração de níveis e recompensas
+   - Ajuste de parâmetros de gamificação por equipe/projeto
+   - Possibilidade de criar desafios personalizados
+
+## Critérios de Aceitação
+
+1. **Qualidade de Código**
+   - Testes unitários cobrindo 80% do código PHP
+   - Implementação de CI/CD para verificação automática de cobertura
+
+2. **Performance**
+   - Latência <500ms nas respostas da API Laravel
+   - Otimização de consultas ao banco de dados
+   - Implementação de cache quando apropriado
+
+3. **Acessibilidade**
+   - Suporte a temas de alto contraste para dislexia
+   - Interfaces adaptáveis para diferentes necessidades
+   - Conformidade com diretrizes WCAG
+
+4. **Documentação**
+   - Formato ADHD-friendly com vídeos curtos
+   - Cheat sheets visuais e de fácil consulta
+   - Documentação técnica completa e bem estruturada
+
+## Requisitos Não-Explícitos Identificados
+
+1. **Segurança**
+   - Autenticação robusta para acesso ao sistema
+   - Proteção de dados sensíveis (commits, métricas de produtividade)
+   - Conformidade com LGPD/GDPR para dados de usuários
+
+2. **Escalabilidade**
+   - Suporte a múltiplas equipes e projetos
+   - Capacidade de lidar com grandes volumes de dados de commits/tasks
+   - Arquitetura que permita crescimento horizontal
+
+3. **Usabilidade**
+   - Interface intuitiva adaptada para usuários com TDAH
+   - Redução de fricção em fluxos de trabalho comuns
+   - Feedback visual e tátil imediato para ações
+
+4. **Integrações**
+   - Webhooks bidirecionais com Jira e GitHub/GitLab
+   - API extensível para integrações futuras
+   - Documentação de API para desenvolvedores externos

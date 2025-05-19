@@ -1,0 +1,1779 @@
+# Módulo de Priorização de Tasks - Projeto TDAH Dev Helper
+
+## Visão Geral
+
+O módulo de priorização de tasks é um componente avançado do sistema, projetado para ajudar desenvolvedores com TDAH a organizar seu trabalho de forma eficiente e adaptada às suas características individuais. Utilizando análise de dados de múltiplas fontes e algoritmos preditivos, o sistema cria um cronograma personalizado que maximiza a produtividade e minimiza a sobrecarga cognitiva.
+
+## Fontes de Dados e Integração
+
+O módulo integra dados de quatro fontes principais:
+
+### 1. Histórico de Commits do Git
+
+A análise de commits fornece insights sobre:
+
+- **Padrões de Produtividade**: Horários e dias da semana com maior volume de commits
+- **Complexidade de Código**: Quantidade de linhas alteradas e arquivos modificados
+- **Tipos de Tarefas**: Categorização baseada em mensagens de commit e arquivos modificados
+- **Tempo de Conclusão**: Duração entre commits relacionados a uma mesma tarefa
+
+**Implementação da Coleta de Dados:**
+
+```php
+// GitAnalysisService.php
+public function getUserCommitHistory(int $userId, int $daysBack = 30): array
+{
+    // Obter integrações do usuário com GitHub/GitLab
+    $gitIntegrations = Integration::where('user_id', $userId)
+        ->whereIn('type', ['github', 'gitlab'])
+        ->where('active', true)
+        ->get();
+    
+    $commitHistory = [];
+    
+    foreach ($gitIntegrations as $integration) {
+        $credentials = json_decode($integration->credentials, true);
+        $settings = json_decode($integration->settings, true);
+        
+        if ($integration->type === 'github') {
+            $commits = $this->fetchGitHubCommits(
+                $credentials['token'],
+                $settings['repositories'],
+                $daysBack
+            );
+        } else {
+            $commits = $this->fetchGitLabCommits(
+                $credentials['token'],
+                $settings['repositories'],
+                $daysBack
+            );
+        }
+        
+        $commitHistory = array_merge($commitHistory, $commits);
+    }
+    
+    // Ordenar por data
+    usort($commitHistory, function($a, $b) {
+        return strtotime($b['date']) - strtotime($a['date']);
+    });
+    
+    return $commitHistory;
+}
+
+private function fetchGitHubCommits(string $token, array $repositories, int $daysBack): array
+{
+    $client = new \Github\Client();
+    $client->authenticate($token, null, \Github\Client::AUTH_ACCESS_TOKEN);
+    
+    $since = (new \DateTime())->sub(new \DateInterval("P{$daysBack}D"));
+    $commits = [];
+    
+    foreach ($repositories as $repo) {
+        list($owner, $repoName) = explode('/', $repo);
+        
+        try {
+            $repoCommits = $client->api('repo')->commits()->all(
+                $owner,
+                $repoName,
+                ['since' => $since->format('c')]
+            );
+            
+            foreach ($repoCommits as $commit) {
+                // Obter detalhes do commit
+                $detail = $client->api('repo')->commits()->show($owner, $repoName, $commit['sha']);
+                
+                $commits[] = [
+                    'repository' => $repo,
+                    'sha' => $commit['sha'],
+                    'message' => $commit['commit']['message'],
+                    'date' => $commit['commit']['author']['date'],
+                    'files_changed' => count($detail['files']),
+                    'additions' => array_sum(array_column($detail['files'], 'additions')),
+                    'deletions' => array_sum(array_column($detail['files'], 'deletions')),
+                    'file_types' => $this->categorizeFileTypes($detail['files'])
+                ];
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error fetching GitHub commits: " . $e->getMessage());
+        }
+    }
+    
+    return $commits;
+}
+
+private function categorizeFileTypes(array $files): array
+{
+    $categories = [
+        'frontend' => 0,
+        'backend' => 0,
+        'test' => 0,
+        'config' => 0,
+        'documentation' => 0
+    ];
+    
+    $patterns = [
+        'frontend' => ['/\.js$/', '/\.ts$/', '/\.jsx$/', '/\.tsx$/', '/\.css$/', '/\.scss$/', '/\.html$/'],
+        'backend' => ['/\.php$/', '/\.py$/', '/\.rb$/', '/\.java$/', '/\.go$/'],
+        'test' => ['/test/', '/spec/', '/\.test\./', '/\.spec\./'],
+        'config' => ['/\.json$/', '/\.yml$/', '/\.yaml$/', '/\.config\./', '/\.env/'],
+        'documentation' => ['/\.md$/', '/\.txt$/', '/docs\//', '/README/']
+    ];
+    
+    foreach ($files as $file) {
+        $filename = $file['filename'];
+        
+        foreach ($patterns as $category => $categoryPatterns) {
+            foreach ($categoryPatterns as $pattern) {
+                if (preg_match($pattern, $filename)) {
+                    $categories[$category]++;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return $categories;
+}
+```
+
+### 2. Prazos e Prioridades do Jira
+
+A integração com o Jira fornece:
+
+- **Datas de Entrega**: Prazos definidos para cada tarefa
+- **Prioridades**: Níveis de importância atribuídos às tarefas
+- **Dependências**: Relações entre tarefas que afetam a ordem de execução
+- **Estimativas**: Tempo estimado para conclusão de cada tarefa
+
+**Implementação da Coleta de Dados:**
+
+```php
+// JiraIntegrationService.php
+public function getUserTasks(int $userId): array
+{
+    // Obter integração do usuário com Jira
+    $jiraIntegration = Integration::where('user_id', $userId)
+        ->where('type', 'jira')
+        ->where('active', true)
+        ->first();
+    
+    if (!$jiraIntegration) {
+        return [];
+    }
+    
+    $credentials = json_decode($jiraIntegration->credentials, true);
+    $settings = json_decode($jiraIntegration->settings, true);
+    
+    $client = new \JiraRestApi\Configuration\ArrayConfiguration([
+        'jiraHost' => $credentials['host'],
+        'jiraUser' => $credentials['username'],
+        'jiraPassword' => $credentials['token']
+    ]);
+    
+    $issueService = new \JiraRestApi\Issue\IssueService($client);
+    
+    try {
+        // Construir JQL para buscar tarefas do usuário
+        $jql = "assignee = '{$credentials['username']}' AND status not in (Done, Closed)";
+        
+        if (!empty($settings['projects'])) {
+            $projects = implode("','", $settings['projects']);
+            $jql .= " AND project in ('{$projects}')";
+        }
+        
+        $jql .= " ORDER BY duedate ASC, priority DESC";
+        
+        $issues = $issueService->search($jql);
+        $tasks = [];
+        
+        foreach ($issues->issues as $issue) {
+            $dueDate = null;
+            if (!empty($issue->fields->duedate)) {
+                $dueDate = $issue->fields->duedate;
+            }
+            
+            $estimatedHours = null;
+            if (!empty($issue->fields->timeoriginalestimate)) {
+                $estimatedHours = $issue->fields->timeoriginalestimate / 3600; // Converter segundos para horas
+            }
+            
+            $priority = 'medium';
+            if (!empty($issue->fields->priority)) {
+                switch ($issue->fields->priority->name) {
+                    case 'Highest':
+                    case 'High':
+                        $priority = 'high';
+                        break;
+                    case 'Low':
+                    case 'Lowest':
+                        $priority = 'low';
+                        break;
+                }
+            }
+            
+            $dependencies = [];
+            if (!empty($issue->fields->issuelinks)) {
+                foreach ($issue->fields->issuelinks as $link) {
+                    if (isset($link->outwardIssue) && $link->type->name === 'Blocks') {
+                        $dependencies[] = $link->outwardIssue->key;
+                    }
+                }
+            }
+            
+            $tasks[] = [
+                'id' => $issue->id,
+                'key' => $issue->key,
+                'title' => $issue->fields->summary,
+                'description' => $issue->fields->description,
+                'priority' => $priority,
+                'status' => $issue->fields->status->name,
+                'due_date' => $dueDate,
+                'estimated_hours' => $estimatedHours,
+                'dependencies' => $dependencies,
+                'project' => $issue->fields->project->key
+            ];
+        }
+        
+        return $tasks;
+    } catch (\Exception $e) {
+        \Log::error("Error fetching Jira tasks: " . $e->getMessage());
+        return [];
+    }
+}
+```
+
+### 3. Horários de Produtividade do Usuário
+
+A análise de produtividade considera:
+
+- **Métricas Históricas**: Horários com maior conclusão de tarefas
+- **Sessões de Hiperfoco**: Períodos em que o modo hiperfoco foi mais efetivo
+- **Preferências do Usuário**: Horários indicados como preferidos pelo usuário
+- **Fatores Contextuais**: Dias da semana, períodos do dia, ambiente
+
+**Implementação da Análise de Produtividade:**
+
+```php
+// ProductivityService.php
+public function getUserPeakHours(int $userId): array
+{
+    // Obter logs de atividade dos últimos 30 dias
+    $activityLogs = ActivityLog::where('user_id', $userId)
+        ->where('created_at', '>=', now()->subDays(30))
+        ->get();
+    
+    // Obter sessões de hiperfoco
+    $focusSessions = ActivityLog::where('user_id', $userId)
+        ->where('action_type', 'focus_session')
+        ->where('created_at', '>=', now()->subDays(30))
+        ->get();
+    
+    // Obter preferências do usuário
+    $user = User::find($userId);
+    $preferences = json_decode($user->preferences, true);
+    $preferredHours = $preferences['productivity']['preferred_hours'] ?? [];
+    
+    // Analisar distribuição de atividades por hora do dia
+    $hourlyActivity = $this->analyzeHourlyActivity($activityLogs);
+    
+    // Analisar efetividade das sessões de hiperfoco
+    $focusEffectiveness = $this->analyzeFocusEffectiveness($focusSessions, $activityLogs);
+    
+    // Combinar dados para identificar horários de pico
+    $peakHours = $this->identifyPeakHours($hourlyActivity, $focusEffectiveness, $preferredHours);
+    
+    return [
+        'peak_hours' => $peakHours,
+        'hourly_activity' => $hourlyActivity,
+        'focus_effectiveness' => $focusEffectiveness,
+        'preferred_hours' => $preferredHours
+    ];
+}
+
+private function analyzeHourlyActivity(Collection $activityLogs): array
+{
+    $hourlyActivity = array_fill(0, 24, 0);
+    $hourlyXP = array_fill(0, 24, 0);
+    
+    foreach ($activityLogs as $log) {
+        $hour = (int) $log->created_at->format('G'); // 0-23
+        $hourlyActivity[$hour]++;
+        $hourlyXP[$hour] += $log->xp_earned;
+    }
+    
+    // Normalizar para pontuação de 0-100
+    $maxActivity = max($hourlyActivity) ?: 1;
+    $maxXP = max($hourlyXP) ?: 1;
+    
+    $hourlyScore = [];
+    for ($i = 0; $i < 24; $i++) {
+        $activityScore = ($hourlyActivity[$i] / $maxActivity) * 100;
+        $xpScore = ($hourlyXP[$i] / $maxXP) * 100;
+        
+        // Combinar pontuações (60% XP, 40% atividade)
+        $hourlyScore[$i] = ($xpScore * 0.6) + ($activityScore * 0.4);
+    }
+    
+    return $hourlyScore;
+}
+
+private function analyzeFocusEffectiveness(Collection $focusSessions, Collection $activityLogs): array
+{
+    $hourlyEffectiveness = array_fill(0, 24, 0);
+    $hourlySessionCount = array_fill(0, 24, 0);
+    
+    foreach ($focusSessions as $session) {
+        $startHour = (int) $session->created_at->format('G');
+        $details = json_decode($session->details, true);
+        
+        if (isset($details['duration'])) {
+            $duration = $details['duration'] / 3600; // Converter para horas
+            
+            // Calcular XP ganho durante a sessão
+            $sessionEnd = $session->created_at->addSeconds($details['duration']);
+            $xpDuringSesssion = ActivityLog::where('user_id', $session->user_id)
+                ->where('created_at', '>=', $session->created_at)
+                ->where('created_at', '<=', $sessionEnd)
+                ->sum('xp_earned');
+            
+            // Calcular efetividade (XP por hora)
+            $effectiveness = $duration > 0 ? $xpDuringSesssion / $duration : 0;
+            
+            // Distribuir pelos horários que a sessão abrangeu
+            $currentHour = $startHour;
+            $remainingDuration = $duration;
+            
+            while ($remainingDuration > 0 && $currentHour < 24) {
+                $hourFraction = min(1, $remainingDuration);
+                $hourlyEffectiveness[$currentHour] += $effectiveness * $hourFraction;
+                $hourlySessionCount[$currentHour] += $hourFraction;
+                
+                $currentHour = ($currentHour + 1) % 24;
+                $remainingDuration -= $hourFraction;
+            }
+        }
+    }
+    
+    // Calcular média de efetividade por hora
+    $hourlyFocusScore = [];
+    for ($i = 0; $i < 24; $i++) {
+        $hourlyFocusScore[$i] = $hourlySessionCount[$i] > 0 
+            ? $hourlyEffectiveness[$i] / $hourlySessionCount[$i] 
+            : 0;
+    }
+    
+    // Normalizar para pontuação de 0-100
+    $maxScore = max($hourlyFocusScore) ?: 1;
+    for ($i = 0; $i < 24; $i++) {
+        $hourlyFocusScore[$i] = ($hourlyFocusScore[$i] / $maxScore) * 100;
+    }
+    
+    return $hourlyFocusScore;
+}
+
+private function identifyPeakHours(array $hourlyActivity, array $focusEffectiveness, array $preferredHours): array
+{
+    $combinedScores = [];
+    
+    // Combinar pontuações (50% atividade, 30% foco, 20% preferências)
+    for ($i = 0; $i < 24; $i++) {
+        $preferenceScore = in_array($i, $preferredHours) ? 100 : 0;
+        $combinedScores[$i] = 
+            ($hourlyActivity[$i] * 0.5) + 
+            ($focusEffectiveness[$i] * 0.3) + 
+            ($preferenceScore * 0.2);
+    }
+    
+    // Identificar períodos contínuos de alta produtividade
+    $threshold = 70; // Pontuação mínima para considerar horário produtivo
+    $peakPeriods = [];
+    $currentPeriod = null;
+    
+    for ($i = 0; $i < 24; $i++) {
+        if ($combinedScores[$i] >= $threshold) {
+            if ($currentPeriod === null) {
+                $currentPeriod = ['start' => $i, 'end' => $i];
+            } else {
+                $currentPeriod['end'] = $i;
+            }
+        } else if ($currentPeriod !== null) {
+            $peakPeriods[] = $currentPeriod;
+            $currentPeriod = null;
+        }
+    }
+    
+    if ($currentPeriod !== null) {
+        $peakPeriods[] = $currentPeriod;
+    }
+    
+    // Formatar períodos para retorno
+    $formattedPeakHours = [];
+    foreach ($peakPeriods as $period) {
+        $formattedPeakHours[] = [
+            'start' => sprintf('%02d:00', $period['start']),
+            'end' => sprintf('%02d:00', $period['end'] + 1),
+            'score' => array_sum(array_slice($combinedScores, $period['start'], $period['end'] - $period['start'] + 1)) / 
+                      ($period['end'] - $period['start'] + 1)
+        ];
+    }
+    
+    // Ordenar por pontuação
+    usort($formattedPeakHours, function($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    
+    return $formattedPeakHours;
+}
+```
+
+### 4. Algoritmo de Monte Carlo para Previsão de Tempo
+
+O algoritmo de Monte Carlo é utilizado para:
+
+- **Estimativas Realistas**: Previsão de tempo baseada em dados históricos
+- **Intervalos de Confiança**: Faixas de tempo provável para conclusão
+- **Análise de Riscos**: Identificação de tarefas com maior variabilidade
+- **Simulações**: Múltiplos cenários para diferentes condições
+
+**Implementação do Algoritmo de Monte Carlo:**
+
+```php
+// TaskPrioritizationService.php
+public function generateSchedule(array $jiraTasks, array $commitHistory, array $productivityData): array
+{
+    // Preparar tarefas com estimativas
+    $tasks = $this->prepareTasks($jiraTasks, $commitHistory);
+    
+    // Executar simulação de Monte Carlo
+    $simulationResults = $this->runMonteCarloSimulation($tasks, 1000);
+    
+    // Gerar cronograma baseado nos resultados da simulação e horários produtivos
+    $schedule = $this->createSchedule($tasks, $simulationResults, $productivityData['peak_hours']);
+    
+    return $schedule;
+}
+
+private function prepareTasks(array $jiraTasks, array $commitHistory): array
+{
+    $preparedTasks = [];
+    
+    foreach ($jiraTasks as $task) {
+        // Encontrar commits relacionados a tarefas similares
+        $relatedCommits = $this->findRelatedCommits($task, $commitHistory);
+        
+        // Calcular estatísticas de tempo baseadas em commits similares
+        $timeStats = $this->calculateTimeStatistics($relatedCommits);
+        
+        // Usar estimativa do Jira se disponível, ou estatísticas de commits
+        $estimatedHours = $task['estimated_hours'] ?? $timeStats['mean'];
+        
+        // Calcular variância para simulação
+        $variance = $timeStats['variance'] ?? ($estimatedHours * 0.3); // 30% de variância padrão
+        
+        $preparedTasks[] = [
+            'id' => $task['id'],
+            'key' => $task['key'],
+            'title' => $task['title'],
+            'priority' => $task['priority'],
+            'due_date' => $task['due_date'],
+            'dependencies' => $task['dependencies'],
+            'estimated_hours' => $estimatedHours,
+            'variance' => $variance,
+            'time_stats' => $timeStats
+        ];
+    }
+    
+    return $preparedTasks;
+}
+
+private function findRelatedCommits(array $task, array $commitHistory): array
+{
+    $relatedCommits = [];
+    $keywords = $this->extractKeywords($task['title'] . ' ' . ($task['description'] ?? ''));
+    
+    foreach ($commitHistory as $commit) {
+        $commitKeywords = $this->extractKeywords($commit['message']);
+        $matchScore = $this->calculateKeywordMatchScore($keywords, $commitKeywords);
+        
+        if ($matchScore > 0.3) { // 30% de similaridade mínima
+            $relatedCommits[] = $commit;
+        }
+    }
+    
+    return $relatedCommits;
+}
+
+private function extractKeywords(string $text): array
+{
+    // Remover caracteres especiais e converter para minúsculas
+    $text = strtolower(preg_replace('/[^\w\s]/', ' ', $text));
+    
+    // Dividir em palavras
+    $words = preg_split('/\s+/', $text);
+    
+    // Remover stop words
+    $stopWords = ['a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
+    $words = array_diff($words, $stopWords);
+    
+    // Contar frequência
+    $wordCount = array_count_values($words);
+    
+    // Ordenar por frequência
+    arsort($wordCount);
+    
+    // Retornar top 10 palavras
+    return array_slice($wordCount, 0, 10, true);
+}
+
+private function calculateKeywordMatchScore(array $keywords1, array $keywords2): float
+{
+    $matches = 0;
+    $totalWeight = 0;
+    
+    foreach ($keywords1 as $word => $weight1) {
+        $totalWeight += $weight1;
+        
+        if (isset($keywords2[$word])) {
+            $matches += min($weight1, $keywords2[$word]);
+        }
+    }
+    
+    return $totalWeight > 0 ? $matches / $totalWeight : 0;
+}
+
+private function calculateTimeStatistics(array $relatedCommits): array
+{
+    if (empty($relatedCommits)) {
+        return [
+            'mean' => 2, // Valor padrão de 2 horas
+            'median' => 2,
+            'min' => 1,
+            'max' => 4,
+            'variance' => 0.6
+        ];
+    }
+    
+    // Agrupar commits por tarefa (baseado em mensagem similar)
+    $commitGroups = [];
+    foreach ($relatedCommits as $commit) {
+        $message = $commit['message'];
+        $key = md5(substr($message, 0, strpos($message . ' ', ' ')));
+        
+        if (!isset($commitGroups[$key])) {
+            $commitGroups[$key] = [];
+        }
+        
+        $commitGroups[$key][] = $commit;
+    }
+    
+    // Calcular duração de cada grupo
+    $durations = [];
+    foreach ($commitGroups as $group) {
+        usort($group, function($a, $b) {
+            return strtotime($a['date']) - strtotime($b['date']);
+        });
+        
+        $firstCommit = reset($group);
+        $lastCommit = end($group);
+        
+        $duration = (strtotime($lastCommit['date']) - strtotime($firstCommit['date'])) / 3600; // Horas
+        
+        // Considerar apenas durações razoáveis (entre 0.5 e 24 horas)
+        if ($duration >= 0.5 && $duration <= 24) {
+            $durations[] = $duration;
+        }
+    }
+    
+    if (empty($durations)) {
+        return [
+            'mean' => 2,
+            'median' => 2,
+            'min' => 1,
+            'max' => 4,
+            'variance' => 0.6
+        ];
+    }
+    
+    // Calcular estatísticas
+    sort($durations);
+    $count = count($durations);
+    $mean = array_sum($durations) / $count;
+    $median = $durations[floor($count / 2)];
+    $min = min($durations);
+    $max = max($durations);
+    
+    // Calcular variância
+    $variance = 0;
+    foreach ($durations as $duration) {
+        $variance += pow($duration - $mean, 2);
+    }
+    $variance = $variance / $count;
+    
+    return [
+        'mean' => $mean,
+        'median' => $median,
+        'min' => $min,
+        'max' => $max,
+        'variance' => $variance,
+        'sample_size' => $count
+    ];
+}
+
+private function runMonteCarloSimulation(array $tasks, int $iterations): array
+{
+    $results = [];
+    
+    foreach ($tasks as $index => $task) {
+        $simulations = [];
+        
+        for ($i = 0; $i < $iterations; $i++) {
+            // Gerar tempo aleatório baseado em distribuição normal
+            $randomTime = $this->generateRandomTime(
+                $task['estimated_hours'],
+                sqrt($task['variance'])
+            );
+            
+            $simulations[] = $randomTime;
+        }
+        
+        sort($simulations);
+        
+        $results[$task['id']] = [
+            'p10' => $simulations[(int)($iterations * 0.1)], // 10º percentil
+            'p50' => $simulations[(int)($iterations * 0.5)], // 50º percentil (mediana)
+            'p90' => $simulations[(int)($iterations * 0.9)], // 90º percentil
+            'mean' => array_sum($simulations) / $iterations,
+            'confidence' => $this->calculateConfidence($simulations)
+        ];
+    }
+    
+    return $results;
+}
+
+private function generateRandomTime(float $mean, float $stdDev): float
+{
+    // Box-Muller transform para gerar número aleatório com distribuição normal
+    $u1 = mt_rand() / mt_getrandmax();
+    $u2 = mt_rand() / mt_getrandmax();
+    
+    $z0 = sqrt(-2.0 * log($u1)) * cos(2.0 * M_PI * $u2);
+    
+    // Aplicar média e desvio padrão
+    $time = $mean + $z0 * $stdDev;
+    
+    // Garantir que o tempo seja positivo
+    return max(0.1, $time);
+}
+
+private function calculateConfidence(array $simulations): float
+{
+    $count = count($simulations);
+    $p50 = $simulations[(int)($count * 0.5)];
+    $p90 = $simulations[(int)($count * 0.9)];
+    
+    // Quanto menor a diferença entre p50 e p90, maior a confiança
+    $range = $p90 - $p50;
+    $normalizedRange = $range / $p50;
+    
+    // Converter para pontuação de confiança (0-1)
+    $confidence = 1 - min(1, $normalizedRange);
+    
+    return $confidence;
+}
+
+private function createSchedule(array $tasks, array $simulationResults, array $peakHours): array
+{
+    // Ordenar tarefas por prioridade e prazo
+    usort($tasks, function($a, $b) {
+        // Primeiro por prioridade
+        $priorityOrder = ['high' => 0, 'medium' => 1, 'low' => 2];
+        $priorityComp = $priorityOrder[$a['priority']] <=> $priorityOrder[$b['priority']];
+        
+        if ($priorityComp !== 0) {
+            return $priorityComp;
+        }
+        
+        // Depois por prazo
+        if ($a['due_date'] && $b['due_date']) {
+            return strtotime($a['due_date']) <=> strtotime($b['due_date']);
+        } else if ($a['due_date']) {
+            return -1;
+        } else if ($b['due_date']) {
+            return 1;
+        }
+        
+        return 0;
+    });
+    
+    // Criar slots de tempo baseados em horários produtivos
+    $timeSlots = [];
+    $currentDate = new \DateTime();
+    
+    // Gerar slots para os próximos 5 dias
+    for ($day = 0; $day < 5; $day++) {
+        $date = (clone $currentDate)->add(new \DateInterval("P{$day}D"));
+        $dateStr = $date->format('Y-m-d');
+        
+        foreach ($peakHours as $peakHour) {
+            $startTime = \DateTime::createFromFormat(
+                'Y-m-d H:i',
+                $dateStr . ' ' . $peakHour['start']
+            );
+            
+            $endTime = \DateTime::createFromFormat(
+                'Y-m-d H:i',
+                $dateStr . ' ' . $peakHour['end']
+            );
+            
+            $duration = ($endTime->getTimestamp() - $startTime->getTimestamp()) / 3600; // Horas
+            
+            $timeSlots[] = [
+                'date' => $dateStr,
+                'start' => $peakHour['start'],
+                'end' => $peakHour['end'],
+                'duration' => $duration,
+                'score' => $peakHour['score'],
+                'task_id' => null
+            ];
+        }
+    }
+    
+    // Ordenar slots por pontuação (mais produtivos primeiro)
+    usort($timeSlots, function($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+    
+    // Atribuir tarefas aos slots
+    $scheduledTasks = [];
+    
+    foreach ($tasks as $task) {
+        $taskId = $task['id'];
+        $estimatedTime = $simulationResults[$taskId]['p50']; // Usar mediana como estimativa
+        $remainingTime = $estimatedTime;
+        
+        // Encontrar slots adequados
+        $assignedSlots = [];
+        
+        foreach ($timeSlots as $index => $slot) {
+            if ($slot['task_id'] === null) {
+                $timeToAssign = min($remainingTime, $slot['duration']);
+                
+                $assignedSlots[] = [
+                    'date' => $slot['date'],
+                    'start' => $slot['start'],
+                    'end' => $this->addHoursToTime($slot['start'], $timeToAssign),
+                    'duration' => $timeToAssign
+                ];
+                
+                // Atualizar slot (pode sobrar tempo no slot)
+                if ($timeToAssign < $slot['duration']) {
+                    $timeSlots[$index]['start'] = $this->addHoursToTime($slot['start'], $timeToAssign);
+                    $timeSlots[$index]['duration'] -= $timeToAssign;
+                } else {
+                    $timeSlots[$index]['task_id'] = $taskId; // Marcar como usado
+                }
+                
+                $remainingTime -= $timeToAssign;
+                
+                if ($remainingTime <= 0) {
+                    break;
+                }
+            }
+        }
+        
+        $scheduledTasks[] = [
+            'id' => $task['id'],
+            'key' => $task['key'],
+            'title' => $task['title'],
+            'priority' => $task['priority'],
+            'due_date' => $task['due_date'],
+            'estimated_time' => $estimatedTime,
+            'predicted_time' => [
+                'p10' => $simulationResults[$taskId]['p10'],
+                'p50' => $simulationResults[$taskId]['p50'],
+                'p90' => $simulationResults[$taskId]['p90'],
+                'mean' => $simulationResults[$taskId]['mean']
+            ],
+            'confidence' => $simulationResults[$taskId]['confidence'],
+            'time_slots' => $assignedSlots
+        ];
+    }
+    
+    return [
+        'generated_at' => now()->toIso8601String(),
+        'tasks' => $scheduledTasks
+    ];
+}
+
+private function addHoursToTime(string $time, float $hours): string
+{
+    list($h, $m) = explode(':', $time);
+    $minutes = $h * 60 + $m + $hours * 60;
+    
+    $newHour = floor($minutes / 60) % 24;
+    $newMinute = $minutes % 60;
+    
+    return sprintf('%02d:%02d', $newHour, $newMinute);
+}
+```
+
+## Interface Visual Interativa
+
+A interface do cronograma é projetada para ser intuitiva e adaptada às necessidades de pessoas com TDAH:
+
+### 1. Componentes da Interface
+
+#### Cronograma Visual
+
+```jsx
+// TaskSchedule.jsx
+import React, { useState, useEffect } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { TimeSlot } from './TimeSlot';
+import { TaskCard } from './TaskCard';
+import { ConfidenceIndicator } from './ConfidenceIndicator';
+
+const TaskSchedule = ({ schedule, onScheduleUpdate }) => {
+  const [tasks, setTasks] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  useEffect(() => {
+    if (schedule && schedule.tasks) {
+      setTasks(schedule.tasks);
+      
+      // Extrair todos os slots de tempo
+      const allSlots = [];
+      schedule.tasks.forEach(task => {
+        task.time_slots.forEach(slot => {
+          allSlots.push({
+            ...slot,
+            task_id: task.id,
+            task_title: task.title,
+            task_key: task.key,
+            task_priority: task.priority
+          });
+        });
+      });
+      
+      // Ordenar por data e hora
+      allSlots.sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.start.localeCompare(b.start);
+      });
+      
+      setTimeSlots(allSlots);
+    }
+  }, [schedule]);
+  
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      // Encontrar índices
+      const oldIndex = timeSlots.findIndex(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}` === active.id);
+      const newIndex = timeSlots.findIndex(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}` === over.id);
+      
+      // Mover slot
+      const newSlots = arrayMove(timeSlots, oldIndex, newIndex);
+      setTimeSlots(newSlots);
+      
+      // Reconstruir tarefas com novos slots
+      const updatedTasks = [...tasks];
+      const taskMap = {};
+      
+      newSlots.forEach(slot => {
+        if (!taskMap[slot.task_id]) {
+          taskMap[slot.task_id] = [];
+        }
+        
+        taskMap[slot.task_id].push({
+          date: slot.date,
+          start: slot.start,
+          end: slot.end,
+          duration: slot.duration
+        });
+      });
+      
+      updatedTasks.forEach(task => {
+        task.time_slots = taskMap[task.id] || [];
+      });
+      
+      setTasks(updatedTasks);
+      onScheduleUpdate({
+        ...schedule,
+        tasks: updatedTasks
+      });
+    }
+  };
+  
+  const handleDateChange = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + direction);
+    setCurrentDate(newDate);
+  };
+  
+  // Filtrar slots para a data atual
+  const currentDateStr = currentDate.toISOString().split('T')[0];
+  const currentSlots = timeSlots.filter(slot => slot.date === currentDateStr);
+  
+  return (
+    <div className="task-schedule">
+      <div className="schedule-header">
+        <button onClick={() => handleDateChange(-1)}>◀ Anterior</button>
+        <h2>{currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
+        <button onClick={() => handleDateChange(1)}>Próximo ▶</button>
+      </div>
+      
+      <div className="schedule-summary">
+        <h3>Resumo do Dia</h3>
+        <div className="summary-stats">
+          <div className="stat">
+            <span className="stat-value">{currentSlots.length}</span>
+            <span className="stat-label">Tarefas</span>
+          </div>
+          <div className="stat">
+            <span className="stat-value">
+              {currentSlots.reduce((sum, slot) => sum + slot.duration, 0).toFixed(1)}h
+            </span>
+            <span className="stat-label">Tempo Total</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="time-grid">
+        {Array.from({ length: 24 }).map((_, hour) => (
+          <div key={`hour-${hour}`} className="hour-marker">
+            <span>{hour}:00</span>
+          </div>
+        ))}
+        
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={currentSlots.map(slot => `slot-${slot.task_id}-${slot.date}-${slot.start}`)} strategy={verticalListSortingStrategy}>
+            {currentSlots.map(slot => {
+              const task = tasks.find(t => t.id === slot.task_id);
+              const startHour = parseInt(slot.start.split(':')[0]);
+              const startMinute = parseInt(slot.start.split(':')[1]);
+              const startPosition = startHour + (startMinute / 60);
+              
+              return (
+                <TimeSlot
+                  key={`slot-${slot.task_id}-${slot.date}-${slot.start}`}
+                  id={`slot-${slot.task_id}-${slot.date}-${slot.start}`}
+                  startPosition={startPosition}
+                  duration={slot.duration}
+                  task={task}
+                />
+              );
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+      
+      <div className="task-list">
+        <h3>Tarefas do Dia</h3>
+        {tasks
+          .filter(task => task.time_slots.some(slot => slot.date === currentDateStr))
+          .map(task => (
+            <TaskCard 
+              key={task.id} 
+              task={task}
+              timeSlots={task.time_slots.filter(slot => slot.date === currentDateStr)}
+            >
+              <ConfidenceIndicator confidence={task.confidence} />
+            </TaskCard>
+          ))
+        }
+      </div>
+    </div>
+  );
+};
+
+export default TaskSchedule;
+```
+
+#### Componente de Slot de Tempo
+
+```jsx
+// TimeSlot.jsx
+import React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+export const TimeSlot = ({ id, startPosition, duration, task }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    top: `calc(${startPosition * 60}px + 50px)`,
+    height: `${duration * 60}px`,
+    backgroundColor: getPriorityColor(task.priority),
+    opacity: task.confidence
+  };
+  
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="time-slot"
+      {...attributes}
+      {...listeners}
+    >
+      <div className="time-slot-header">
+        <span className="time-slot-time">{formatTimeRange(startPosition, duration)}</span>
+        <span className="time-slot-key">{task.key}</span>
+      </div>
+      <div className="time-slot-title">{task.title}</div>
+    </div>
+  );
+};
+
+const formatTimeRange = (startHour, durationHours) => {
+  const start = formatTime(startHour);
+  const end = formatTime(startHour + durationHours);
+  return `${start} - ${end}`;
+};
+
+const formatTime = (timeInHours) => {
+  const hours = Math.floor(timeInHours);
+  const minutes = Math.round((timeInHours - hours) * 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case 'high': return 'var(--priority-high)';
+    case 'medium': return 'var(--priority-medium)';
+    case 'low': return 'var(--priority-low)';
+    default: return 'var(--priority-medium)';
+  }
+};
+```
+
+#### Componente de Cartão de Tarefa
+
+```jsx
+// TaskCard.jsx
+import React from 'react';
+
+export const TaskCard = ({ task, timeSlots, children }) => {
+  const totalDuration = timeSlots.reduce((sum, slot) => sum + slot.duration, 0);
+  
+  return (
+    <div className={`task-card priority-${task.priority}`}>
+      <div className="task-card-header">
+        <span className="task-key">{task.key}</span>
+        <span className="task-priority">{formatPriority(task.priority)}</span>
+      </div>
+      
+      <h4 className="task-title">{task.title}</h4>
+      
+      <div className="task-times">
+        <div className="time-item">
+          <span className="time-label">Estimado:</span>
+          <span className="time-value">{task.estimated_time.toFixed(1)}h</span>
+        </div>
+        <div className="time-item">
+          <span className="time-label">Previsto:</span>
+          <span className="time-value">{task.predicted_time.p50.toFixed(1)}h</span>
+        </div>
+        <div className="time-item">
+          <span className="time-label">Hoje:</span>
+          <span className="time-value">{totalDuration.toFixed(1)}h</span>
+        </div>
+      </div>
+      
+      {children}
+      
+      {task.due_date && (
+        <div className="task-due-date">
+          <span className="due-label">Prazo:</span>
+          <span className="due-value">{formatDate(task.due_date)}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const formatPriority = (priority) => {
+  switch (priority) {
+    case 'high': return 'Alta';
+    case 'medium': return 'Média';
+    case 'low': return 'Baixa';
+    default: return 'Média';
+  }
+};
+
+const formatDate = (dateStr) => {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('pt-BR');
+};
+```
+
+#### Indicador de Confiança
+
+```jsx
+// ConfidenceIndicator.jsx
+import React from 'react';
+
+export const ConfidenceIndicator = ({ confidence }) => {
+  // Converter confiança (0-1) para porcentagem
+  const percentage = Math.round(confidence * 100);
+  
+  // Determinar cor baseada na confiança
+  const getColor = () => {
+    if (percentage >= 80) return '#4cd137'; // Verde
+    if (percentage >= 60) return '#fbc531'; // Amarelo
+    return '#e84118'; // Vermelho
+  };
+  
+  return (
+    <div className="confidence-indicator">
+      <div className="confidence-bar">
+        <div 
+          className="confidence-fill" 
+          style={{ 
+            width: `${percentage}%`,
+            backgroundColor: getColor()
+          }}
+        />
+      </div>
+      <div className="confidence-label">
+        Confiança: {percentage}%
+      </div>
+    </div>
+  );
+};
+```
+
+### 2. Estilização Adaptada para TDAH
+
+```css
+/* TaskSchedule.css */
+:root {
+  --priority-high: rgba(231, 76, 60, 0.8);
+  --priority-medium: rgba(241, 196, 15, 0.8);
+  --priority-low: rgba(46, 204, 113, 0.8);
+  --background-primary: #f8f9fa;
+  --background-secondary: #ffffff;
+  --text-primary: #2d3436;
+  --text-secondary: #636e72;
+  --border-color: #dfe6e9;
+  --highlight-color: #0984e3;
+}
+
+/* Tema escuro */
+.dark-theme {
+  --priority-high: rgba(231, 76, 60, 0.9);
+  --priority-medium: rgba(241, 196, 15, 0.9);
+  --priority-low: rgba(46, 204, 113, 0.9);
+  --background-primary: #2d3436;
+  --background-secondary: #1e272e;
+  --text-primary: #f5f6fa;
+  --text-secondary: #dcdde1;
+  --border-color: #636e72;
+  --highlight-color: #74b9ff;
+}
+
+.task-schedule {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.schedule-header button {
+  background-color: var(--highlight-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.schedule-header button:hover {
+  background-color: #0077cc;
+}
+
+.schedule-summary {
+  background-color: var(--background-secondary);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.summary-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--highlight-color);
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.time-grid {
+  position: relative;
+  background-color: var(--background-secondary);
+  height: 1500px; /* 24 horas * 60px + 60px para cabeçalho */
+  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.hour-marker {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background-color: var(--border-color);
+  left: 0;
+}
+
+.hour-marker span {
+  position: absolute;
+  left: 5px;
+  top: -10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.time-slot {
+  position: absolute;
+  width: calc(100% - 60px);
+  left: 50px;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: grab;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s, transform 0.2s;
+  overflow: hidden;
+}
+
+.time-slot:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.time-slot-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.time-slot-time {
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.time-slot-key {
+  background-color: rgba(255, 255, 255, 0.3);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.time-slot-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-list {
+  background-color: var(--background-secondary);
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.task-card {
+  background-color: var(--background-primary);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-left: 5px solid;
+}
+
+.task-card.priority-high {
+  border-left-color: var(--priority-high);
+}
+
+.task-card.priority-medium {
+  border-left-color: var(--priority-medium);
+}
+
+.task-card.priority-low {
+  border-left-color: var(--priority-low);
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.task-key {
+  background-color: var(--highlight-color);
+  color: white;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.task-priority {
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+
+.priority-high .task-priority {
+  background-color: var(--priority-high);
+  color: white;
+}
+
+.priority-medium .task-priority {
+  background-color: var(--priority-medium);
+  color: black;
+}
+
+.priority-low .task-priority {
+  background-color: var(--priority-low);
+  color: white;
+}
+
+.task-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+}
+
+.task-times {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.time-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.time-value {
+  font-weight: bold;
+}
+
+.task-due-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 10px;
+}
+
+.confidence-indicator {
+  margin: 10px 0;
+}
+
+.confidence-bar {
+  height: 8px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.confidence-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 5px;
+  text-align: right;
+}
+
+/* Adaptações para TDAH */
+.task-schedule * {
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+.time-slot, .task-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.time-slot:hover, .task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Animação sutil para feedback visual */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.time-slot.just-moved {
+  animation: pulse 0.5s ease-in-out;
+}
+```
+
+### 3. Considerações de Acessibilidade para TDAH
+
+1. **Redução de Sobrecarga Cognitiva**:
+   - Informações agrupadas em blocos gerenciáveis
+   - Foco em um dia por vez
+   - Visualização clara de prioridades por cores
+
+2. **Feedback Visual Imediato**:
+   - Animações sutis durante interações
+   - Indicadores visuais de confiança
+   - Cores contrastantes para prioridades
+
+3. **Interação Intuitiva**:
+   - Drag-and-drop para reorganização
+   - Controles simples para navegação
+   - Feedback tátil em dispositivos móveis
+
+4. **Personalização**:
+   - Suporte a temas claro/escuro
+   - Opções para ajustar densidade de informações
+   - Configurações para reduzir animações
+
+## Implementação no Backend
+
+### Controller para Priorização de Tasks
+
+```php
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\TaskPrioritizationService;
+use App\Services\GitAnalysisService;
+use App\Services\JiraIntegrationService;
+use App\Services\ProductivityService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class TaskPrioritizationController extends Controller
+{
+    protected $taskPrioritizationService;
+    protected $gitAnalysisService;
+    protected $jiraIntegrationService;
+    protected $productivityService;
+    
+    public function __construct(
+        TaskPrioritizationService $taskPrioritizationService,
+        GitAnalysisService $gitAnalysisService,
+        JiraIntegrationService $jiraIntegrationService,
+        ProductivityService $productivityService
+    ) {
+        $this->taskPrioritizationService = $taskPrioritizationService;
+        $this->gitAnalysisService = $gitAnalysisService;
+        $this->jiraIntegrationService = $jiraIntegrationService;
+        $this->productivityService = $productivityService;
+    }
+    
+    /**
+     * Gera um cronograma priorizado de tarefas
+     */
+    public function prioritizeTasks(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Obter dados do Git
+        $commitHistory = $this->gitAnalysisService->getUserCommitHistory($user->id);
+        
+        // Obter tarefas do Jira
+        $jiraTasks = $this->jiraIntegrationService->getUserTasks($user->id);
+        
+        // Obter dados de produtividade
+        $productivityData = $this->productivityService->getUserPeakHours($user->id);
+        
+        // Gerar cronograma
+        $schedule = $this->taskPrioritizationService->generateSchedule(
+            $jiraTasks,
+            $commitHistory,
+            $productivityData
+        );
+        
+        return response()->json([
+            'success' => true,
+            'data' => $schedule
+        ]);
+    }
+    
+    /**
+     * Atualiza o cronograma após reorganização
+     */
+    public function updateSchedule(Request $request)
+    {
+        $request->validate([
+            'schedule' => 'required|array',
+            'schedule.tasks' => 'required|array'
+        ]);
+        
+        $user = Auth::user();
+        $schedule = $request->schedule;
+        
+        // Salvar cronograma atualizado
+        $user->update([
+            'preferences->schedule' => json_encode($schedule)
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Cronograma atualizado com sucesso'
+        ]);
+    }
+    
+    /**
+     * Retorna o cronograma atual do usuário
+     */
+    public function getSchedule(Request $request)
+    {
+        $user = Auth::user();
+        $preferences = json_decode($user->preferences, true);
+        
+        $schedule = $preferences['schedule'] ?? null;
+        
+        if (!$schedule) {
+            // Se não houver cronograma salvo, gerar um novo
+            return $this->prioritizeTasks($request);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $schedule
+        ]);
+    }
+}
+```
+
+## Implementação na Extensão VS Code
+
+### Integração com o Módulo de Priorização
+
+```typescript
+// tasks/prioritization.ts
+export class TaskPrioritizer {
+    private apiClient: ApiClient;
+    
+    constructor(apiClient: ApiClient) {
+        this.apiClient = apiClient;
+    }
+    
+    public async showSchedule(): Promise<void> {
+        try {
+            // Obter cronograma atual
+            const schedule = await this.apiClient.getSchedule();
+            
+            // Criar webview para exibir cronograma
+            const panel = vscode.window.createWebviewPanel(
+                'taskSchedule',
+                'Cronograma de Tarefas',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    retainContextWhenHidden: true,
+                    localResourceRoots: [
+                        vscode.Uri.file(path.join(this.extensionPath, 'media'))
+                    ]
+                }
+            );
+            
+            // Configurar HTML
+            panel.webview.html = this.generateScheduleHTML(schedule);
+            
+            // Configurar mensagens
+            panel.webview.onDidReceiveMessage(message => {
+                switch (message.command) {
+                    case 'updateSchedule':
+                        this.apiClient.updateSchedule(message.schedule);
+                        break;
+                    case 'selectTask':
+                        vscode.commands.executeCommand('tdah-dev-helper.selectTask', message.taskId);
+                        break;
+                }
+            });
+        } catch (error) {
+            console.error('Erro ao exibir cronograma:', error);
+            vscode.window.showErrorMessage('Erro ao carregar cronograma de tarefas.');
+        }
+    }
+    
+    public async generateNewSchedule(): Promise<void> {
+        try {
+            vscode.window.showInformationMessage('Gerando novo cronograma de tarefas...');
+            
+            // Solicitar novo cronograma
+            const schedule = await this.apiClient.prioritizeTasks();
+            
+            // Exibir cronograma
+            this.showSchedule();
+            
+            vscode.window.showInformationMessage('Novo cronograma gerado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao gerar cronograma:', error);
+            vscode.window.showErrorMessage('Erro ao gerar cronograma de tarefas.');
+        }
+    }
+    
+    private generateScheduleHTML(schedule: any): string {
+        // Código para gerar HTML do cronograma
+        // ...
+        
+        return `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Cronograma de Tarefas</title>
+                <style>
+                    /* Estilos CSS */
+                    /* ... */
+                </style>
+            </head>
+            <body>
+                <div id="app">
+                    <div class="schedule-header">
+                        <h1>Cronograma de Tarefas</h1>
+                        <button id="refreshButton">Gerar Novo</button>
+                    </div>
+                    
+                    <div class="date-navigation">
+                        <button id="prevDay">◀ Anterior</button>
+                        <h2 id="currentDate"></h2>
+                        <button id="nextDay">Próximo ▶</button>
+                    </div>
+                    
+                    <div id="timeGrid" class="time-grid">
+                        <!-- Slots de tempo serão inseridos aqui -->
+                    </div>
+                    
+                    <div id="taskList" class="task-list">
+                        <!-- Tarefas serão inseridas aqui -->
+                    </div>
+                </div>
+                
+                <script>
+                    // Dados do cronograma
+                    const schedule = ${JSON.stringify(schedule)};
+                    
+                    // Código JavaScript para manipulação do cronograma
+                    // ...
+                    
+                    // Comunicação com extensão
+                    const vscode = acquireVsCodeApi();
+                    
+                    document.getElementById('refreshButton').addEventListener('click', () => {
+                        vscode.postMessage({
+                            command: 'generateNewSchedule'
+                        });
+                    });
+                    
+                    // Implementação de drag-and-drop
+                    // ...
+                    
+                    // Atualização do cronograma
+                    function updateSchedule(newSchedule) {
+                        vscode.postMessage({
+                            command: 'updateSchedule',
+                            schedule: newSchedule
+                        });
+                    }
+                    
+                    // Seleção de tarefa
+                    function selectTask(taskId) {
+                        vscode.postMessage({
+                            command: 'selectTask',
+                            taskId: taskId
+                        });
+                    }
+                </script>
+            </body>
+            </html>
+        `;
+    }
+}
+```
+
+## Considerações para Desenvolvedores com TDAH
+
+### 1. Redução de Sobrecarga Cognitiva
+
+- **Foco em Um Dia**: Visualização padrão mostra apenas um dia por vez
+- **Agrupamento Inteligente**: Tarefas agrupadas por contexto e prioridade
+- **Informações Essenciais**: Exibição apenas de detalhes relevantes para o momento
+
+### 2. Adaptação a Padrões de Trabalho
+
+- **Horários Produtivos**: Priorização automática baseada em horários de pico
+- **Sessões de Hiperfoco**: Sugestão de tarefas complexas durante períodos de hiperfoco
+- **Alternância de Contexto**: Minimização de trocas de contexto desnecessárias
+
+### 3. Feedback Visual e Tátil
+
+- **Cores Significativas**: Esquema de cores consistente para prioridades
+- **Animações Sutis**: Feedback visual para interações
+- **Notificações Táteis**: Integração com smartwatch para lembretes importantes
+
+### 4. Personalização
+
+- **Ajuste de Densidade**: Opções para aumentar ou reduzir quantidade de informações
+- **Preferências de Visualização**: Escolha entre visualização de calendário ou lista
+- **Configurações de Notificações**: Controle sobre frequência e tipo de alertas
+
+## Próximos Passos
+
+1. **Implementação**:
+   - Desenvolvimento dos serviços de análise de Git e Jira
+   - Implementação do algoritmo de Monte Carlo
+   - Criação da interface drag-and-drop
+
+2. **Testes**:
+   - Validação da precisão das previsões
+   - Testes de usabilidade com desenvolvedores com TDAH
+   - Otimização de performance
+
+3. **Integração**:
+   - Conexão com módulo de gamificação
+   - Integração com extensão VS Code
+   - Sincronização com backend Laravel
