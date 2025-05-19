@@ -167,22 +167,16 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
                     gamificationManager?.showProfile();
                 })
-            ] : []),
-
-            // Comandos de Temas
-            vscode.commands.registerCommand('tdah-dev-helper.changeTheme', () => {
-                themeManager?.showThemePicker();
-            })
+            ] : [])
         ];
 
         // Adicionar disposables ao contexto
         context.subscriptions.push(...disposables);
 
-        // Inicializar componentes
+        // Inicializar componentes (removendo a chamada de initialize() do NotificationBlocker e de outros que já são inicializados no construtor)
         await Promise.all([
             contextDetector?.initialize(),
             hyperfocusManager.initialize(),
-            notificationBlocker.initialize(),
             taskTracker?.initialize(),
             gamificationManager?.initialize(),
             themeManager.initialize()

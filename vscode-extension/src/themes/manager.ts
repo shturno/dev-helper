@@ -81,6 +81,7 @@ export class ThemeManager {
     private config: vscode.WorkspaceConfiguration;
     private disposables: vscode.Disposable[] = [];
     private currentTheme: ThemeConfig | null = null;
+    private isInitialized: boolean = false;
 
     private readonly themes: ThemeConfig[] = [
         {
@@ -436,7 +437,10 @@ export class ThemeManager {
     }
 
     public async initialize(): Promise<void> {
-        // Registrar comando para mudar tema
+        if (this.isInitialized) return;
+        this.isInitialized = true;
+
+        // Registrar comando para mudar tema (somente aqui, não no construtor)
         this.disposables.push(
             vscode.commands.registerCommand(
                 'tdah-dev-helper.changeTheme',

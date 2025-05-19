@@ -11,6 +11,7 @@ export class NotificationBlocker {
     private blockedNotifications: BlockedNotification[] = [];
     private disposables: vscode.Disposable[] = [];
     private statusBarItem: vscode.StatusBarItem;
+    private isInitialized: boolean = false;
 
     constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(
@@ -23,6 +24,8 @@ export class NotificationBlocker {
     }
 
     public initialize(): void {
+        if (this.isInitialized) return;
+        this.isInitialized = true;
         // Substituir métodos de notificação
         const originalShowInfo = vscode.window.showInformationMessage;
         const originalShowWarning = vscode.window.showWarningMessage;

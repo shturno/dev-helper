@@ -84,20 +84,17 @@
     ],
     "themes": [
       {
-        "id": "tdah-light",
-        "label": "TDAH Light",
-        "uiTheme": "vs",
-        "path": "./themes/tdah-light.json"
-      },
-      {
-        "id": "tdah-dark",
-        "label": "TDAH Dark",
+        "label": "TDAH Focus Dark",
         "uiTheme": "vs-dark",
         "path": "./themes/tdah-dark.json"
       },
       {
-        "id": "tdah-high-contrast",
-        "label": "TDAH High Contrast",
+        "label": "TDAH Focus Light",
+        "uiTheme": "vs",
+        "path": "./themes/tdah-light.json"
+      },
+      {
+        "label": "TDAH Focus High Contrast",
         "uiTheme": "hc-black",
         "path": "./themes/tdah-high-contrast.json"
       }
