@@ -11,7 +11,8 @@
     "url": "https://github.com/yourusername/tdah-dev-helper"
   },
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.60.0",
+    "cursor": "*"
   },
   "categories": [
     "Other",
@@ -27,11 +28,6 @@
     "gamification",
     "accessibility"
   ],
-  "icon": "images/icon.png",
-  "galleryBanner": {
-    "color": "#3498DB",
-    "theme": "dark"
-  },
   "activationEvents": [
     "onCommand:tdah-dev-helper.startFocus",
     "onCommand:tdah-dev-helper.stopFocus",
@@ -117,8 +113,8 @@
         },
         "tdahDevHelper.apiUrl": {
           "type": "string",
-          "default": "http://localhost:3000",
-          "description": "URL da API do TDAH Dev Helper"
+          "default": "",
+          "description": "URL da API do TDAH Dev Helper (opcional)"
         },
         "tdahDevHelper.notificationBlocking": {
           "type": "boolean",
@@ -127,8 +123,13 @@
         },
         "tdahDevHelper.gamification": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Ativar sistema de gamificação"
+        },
+        "tdahDevHelper.debug": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ativar modo debug para ver logs detalhados"
         }
       }
     }

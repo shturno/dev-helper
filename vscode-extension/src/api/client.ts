@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 export interface Task {
@@ -48,14 +47,12 @@ export interface ApiConfig {
 
 export class ApiClient {
     private client: AxiosInstance;
-    private config: vscode.WorkspaceConfiguration;
+    private baseUrl: string;
 
-    constructor() {
-        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
-        const baseUrl = this.config.get<string>('apiUrl') || 'http://localhost:3000';
-        
+    constructor(baseUrl?: string) {
+        this.baseUrl = baseUrl || 'http://localhost:3000';
         this.client = axios.create({
-            baseURL: baseUrl,
+            baseURL: this.baseUrl,
             timeout: 5000,
             headers: {
                 'Content-Type': 'application/json'
