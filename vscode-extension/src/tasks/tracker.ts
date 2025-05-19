@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { ApiClient, Task, Subtask } from '../api/client';
+import { GamificationManager } from '../gamification/manager';
 
 export class TaskTracker {
     private apiClient: ApiClient;
+    private gamificationManager: GamificationManager;
     private currentTask: Task | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
@@ -10,6 +12,7 @@ export class TaskTracker {
 
     constructor(apiClient: ApiClient) {
         this.apiClient = apiClient;
+        this.gamificationManager = GamificationManager.getInstance(apiClient);
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
@@ -218,16 +221,14 @@ export class TaskTracker {
         try {
             const result = await this.apiClient.completeSubtask(subtaskId);
             
-            // Mostrar notificação de XP ganho
-            vscode.window.showInformationMessage(
-                `Subtarefa concluída! +${result.xp_earned} XP`
-            );
+            // Notificar sistema de gamificação
+            await this.gamificationManager.onTaskCompleted(result.xp_earned);
 
             // Se todas as subtarefas foram concluídas
             if (result.all_completed) {
-                vscode.window.showInformationMessage(
-                    `Tarefa concluída! Total de XP: ${this.currentTask?.xpReward}`
-                );
+                const taskXp = this.currentTask?.xpReward || 0;
+                await this.gamificationManager.onTaskCompleted(taskXp);
+                
                 this.currentTask = null;
                 this.updateStatusBar();
             }

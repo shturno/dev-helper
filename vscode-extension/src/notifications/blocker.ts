@@ -25,12 +25,60 @@ export class NotificationBlocker {
     }
 
     public initialize(): void {
-        // Registrar eventos de notificação
-        this.disposables.push(
-            vscode.window.onDidShowInformationMessage(this.handleNotification.bind(this)),
-            vscode.window.onDidShowWarningMessage(this.handleNotification.bind(this)),
-            vscode.window.onDidShowErrorMessage(this.handleNotification.bind(this))
-        );
+        // Substituir métodos de notificação
+        const originalShowInfo = vscode.window.showInformationMessage;
+        const originalShowWarning = vscode.window.showWarningMessage;
+        const originalShowError = vscode.window.showErrorMessage;
+
+        const blocker = this;
+
+        // Handler para notificações com strings
+        const handleStringNotification = function(
+            originalFn: typeof vscode.window.showInformationMessage,
+            message: string,
+            ...items: string[]
+        ): Thenable<string | undefined> {
+            if (blocker.isBlocking) {
+                blocker.handleNotification(message);
+                return Promise.resolve(undefined);
+            }
+            return originalFn(message, ...items);
+        };
+
+        // Handler para notificações com MessageItems
+        const handleMessageItemNotification = function(
+            originalFn: typeof vscode.window.showInformationMessage,
+            message: string,
+            ...items: vscode.MessageItem[]
+        ): Thenable<vscode.MessageItem | undefined> {
+            if (blocker.isBlocking) {
+                blocker.handleNotification(message);
+                return Promise.resolve(undefined);
+            }
+            return originalFn(message, ...items);
+        };
+
+        // Substituir métodos originais
+        vscode.window.showInformationMessage = function(message: string, ...items: any[]): any {
+            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
+                return handleMessageItemNotification(originalShowInfo, message, ...items as vscode.MessageItem[]);
+            }
+            return handleStringNotification(originalShowInfo, message, ...items as string[]);
+        };
+
+        vscode.window.showWarningMessage = function(message: string, ...items: any[]): any {
+            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
+                return handleMessageItemNotification(originalShowWarning, message, ...items as vscode.MessageItem[]);
+            }
+            return handleStringNotification(originalShowWarning, message, ...items as string[]);
+        };
+
+        vscode.window.showErrorMessage = function(message: string, ...items: any[]): any {
+            if (items.length > 0 && typeof items[0] === 'object' && 'title' in items[0]) {
+                return handleMessageItemNotification(originalShowError, message, ...items as vscode.MessageItem[]);
+            }
+            return handleStringNotification(originalShowError, message, ...items as string[]);
+        };
 
         // Registrar comando para mostrar notificações bloqueadas
         this.disposables.push(
@@ -39,6 +87,15 @@ export class NotificationBlocker {
                 this.showBlockedNotifications.bind(this)
             )
         );
+
+        // Restaurar métodos originais ao desativar
+        this.disposables.push({
+            dispose: () => {
+                vscode.window.showInformationMessage = originalShowInfo;
+                vscode.window.showWarningMessage = originalShowWarning;
+                vscode.window.showErrorMessage = originalShowError;
+            }
+        });
     }
 
     public dispose(): void {
@@ -98,7 +155,7 @@ export class NotificationBlocker {
         this.updateStatusBar();
     }
 
-    private async showBlockedNotifications(): Promise<void> {
+    public showBlockedNotifications(): void {
         if (this.blockedNotifications.length === 0) {
             vscode.window.showInformationMessage('Nenhuma notificação bloqueada');
             return;

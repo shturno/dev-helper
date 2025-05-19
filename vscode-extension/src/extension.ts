@@ -4,6 +4,7 @@ import { ContextDetector } from 'context/detector';
 import { HyperfocusManager } from 'hyperfocus/manager';
 import { NotificationBlocker } from 'notifications/blocker';
 import { TaskTracker } from 'tasks/tracker';
+import { GamificationManager } from 'gamification/manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient;
@@ -11,6 +12,7 @@ let contextDetector: ContextDetector;
 let hyperfocusManager: HyperfocusManager;
 let notificationBlocker: NotificationBlocker;
 let taskTracker: TaskTracker;
+let gamificationManager: GamificationManager;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('TDAH Dev Helper está ativo!');
@@ -24,6 +26,7 @@ export async function activate(context: vscode.ExtensionContext) {
         hyperfocusManager = HyperfocusManager.getInstance();
         notificationBlocker = new NotificationBlocker();
         taskTracker = new TaskTracker(apiClient);
+        gamificationManager = GamificationManager.getInstance(apiClient);
 
         // Registrar comandos
         const disposables = [
@@ -126,6 +129,11 @@ export async function activate(context: vscode.ExtensionContext) {
             // Comando para mostrar notificações bloqueadas
             vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', () => {
                 notificationBlocker.showBlockedNotifications();
+            }),
+
+            // Comandos de Gamificação
+            vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
+                gamificationManager.showProfile();
             })
         ];
 
@@ -137,7 +145,8 @@ export async function activate(context: vscode.ExtensionContext) {
             contextDetector.initialize(),
             hyperfocusManager.initialize(),
             notificationBlocker.initialize(),
-            taskTracker.initialize()
+            taskTracker.initialize(),
+            gamificationManager.initialize()
         ]);
 
         // Mostrar mensagem de boas-vindas
@@ -166,6 +175,7 @@ export async function deactivate() {
         hyperfocusManager?.dispose();
         notificationBlocker?.dispose();
         taskTracker?.dispose();
+        gamificationManager?.dispose();
 
         console.log('TDAH Dev Helper foi desativado.');
     } catch (error) {
