@@ -95,9 +95,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
             // Comandos de Tarefas (agora sempre disponíveis)
             vscode.commands.registerCommand('tdah-dev-helper.showDashboard', () => {
+                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.showDashboard' chamado.");
                 taskTracker?.showDashboard();
             }),
+            vscode.commands.registerCommand('tdah-dev-helper.createTask', async () => {
+                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.createTask' chamado.");
+                try {
+                    if (!taskTracker) {
+                        throw new Error('TaskTracker não inicializado');
+                    }
+
+                    if (hyperfocusManager?.isActive) {
+                        const shouldStopFocus = await vscode.window.showWarningMessage(
+                            'Você está em modo hiperfoco. Deseja desativá-lo para criar uma nova tarefa?',
+                            'Sim', 'Não'
+                        );
+                        
+                        if (shouldStopFocus === 'Sim') {
+                            await hyperfocusManager.deactivateHyperfocus();
+                            notificationBlocker?.stopBlocking();
+                        } else {
+                            return;
+                        }
+                    }
+
+                    await taskTracker.createTask();
+                } catch (error) {
+                    console.error('Erro ao criar tarefa:', error);
+                    vscode.window.showErrorMessage('Erro ao criar tarefa');
+                }
+            }),
             vscode.commands.registerCommand('tdah-dev-helper.selectTask', async () => {
+                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.selectTask' chamado.");
                 try {
                     if (!taskTracker) {
                         throw new Error('TaskTracker não inicializado');
@@ -124,6 +153,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
             vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', async () => {
+                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.decomposeTask' chamado.");
                 try {
                     if (!taskTracker) {
                         throw new Error('TaskTracker não inicializado');

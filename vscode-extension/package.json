@@ -36,7 +36,8 @@
     "onCommand:tdah-dev-helper.decomposeTask",
     "onCommand:tdah-dev-helper.showBlockedNotifications",
     "onCommand:tdah-dev-helper.showProfile",
-    "onCommand:tdah-dev-helper.changeTheme"
+    "onCommand:tdah-dev-helper.changeTheme",
+    "onCommand:tdah-dev-helper.createTask"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -79,6 +80,11 @@
       {
         "command": "tdah-dev-helper.changeTheme",
         "title": "TDAH: Mudar Tema",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.createTask",
+        "title": "TDAH: Criar Nova Tarefa",
         "category": "TDAH Dev Helper"
       }
     ],
