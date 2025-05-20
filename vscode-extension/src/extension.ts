@@ -1,31 +1,23 @@
 import * as vscode from 'vscode';
 import { ApiClient } from './api/client';
-import { ContextDetector } from './context/detector';
+import { TaskTracker } from './tasks/tracker';
 import { HyperfocusManager } from './hyperfocus/manager';
 import { NotificationBlocker } from './notifications/blocker';
-import { TaskTracker } from './tasks/tracker';
-import { GamificationManager } from './gamification/manager';
-import { ThemeManager } from './themes/manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
-let contextDetector: ContextDetector | null = null;
 let hyperfocusManager: HyperfocusManager | null = null;
 let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
-let gamificationManager: GamificationManager | null = null;
-let themeManager: ThemeManager | null = null;
 
-export async function activate(context: vscode.ExtensionContext) {
-    console.log('TDAH Dev Helper está ativo!');
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+    console.warn('TDAH Dev Helper está ativo!');
 
     try {
         // Inicializar componentes principais
         hyperfocusManager = HyperfocusManager.getInstance();
         notificationBlocker = new NotificationBlocker();
-        themeManager = ThemeManager.getInstance();
         taskTracker = new TaskTracker(context);
-        gamificationManager = GamificationManager.getInstance();
 
         // Inicializar componentes opcionais baseados na configuração
         const config = vscode.workspace.getConfiguration('tdahDevHelper');
@@ -33,14 +25,13 @@ export async function activate(context: vscode.ExtensionContext) {
         const debug = config.get<boolean>('debug');
 
         if (debug) {
-            console.log('TDAH Dev Helper: Modo debug ativado');
-            console.log('TDAH Dev Helper: API URL:', apiUrl || 'não configurada');
+            console.warn('TDAH Dev Helper: Modo debug ativado');
+            console.warn('TDAH Dev Helper: API URL:', apiUrl || 'não configurada');
         }
 
         if (apiUrl) {
             try {
                 apiClient = new ApiClient(apiUrl);
-                contextDetector = new ContextDetector(apiClient);
             } catch (error) {
                 console.error('TDAH Dev Helper: Erro ao inicializar API:', error);
                 vscode.window.showWarningMessage(
@@ -135,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 }
 
-export function deactivate() {
+export function deactivate(): void {
     if (taskTracker) {
         taskTracker.dispose();
     }

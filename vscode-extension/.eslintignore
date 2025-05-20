@@ -1,0 +1,16 @@
+# Diretórios de build e dependências
+out/
+dist/
+coverage/
+node_modules/
+
+# Arquivos de definição de tipos
+*.d.ts
+
+# Arquivos de configuração
+jest.config.js
+webpack.config.js
+
+# Arquivos de teste
+**/*.test.ts
+**/*.spec.ts 

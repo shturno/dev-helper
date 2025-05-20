@@ -110,7 +110,11 @@
       "properties": {
         "tdahDevHelper.theme": {
           "type": "string",
-          "enum": ["tdah-light", "tdah-dark", "tdah-high-contrast"],
+          "enum": [
+            "tdah-light",
+            "tdah-dark",
+            "tdah-high-contrast"
+          ],
           "default": "tdah-light",
           "description": "Tema otimizado para desenvolvedores com TDAH"
         },
@@ -144,31 +148,37 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint \"src/**/*.ts\" --ext .ts",
     "test": "node ./out/test/runTest.js",
     "clean": "rimraf dist out",
     "build": "npm run compile",
-    "dev": "npm run clean && npm run watch"
+    "dev": "npm run clean && npm run watch",
+    "test:watch": "jest --watch"
   },
   "devDependencies": {
-    "@types/vscode": "^1.60.0",
     "@types/glob": "^8.1.0",
+    "@types/jest": "^29.5.14",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.24",
+    "@types/vscode": "^1.60.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
-    "@vscode/test-electron": "^2.3.9",
+    "@vscode/test-electron": "^2.3.8",
     "eslint": "^8.57.0",
     "glob": "^10.3.10",
+    "jest": "^29.7.0",
     "mocha": "^10.3.0",
     "rimraf": "^5.0.5",
+    "ts-jest": "^29.1.2",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^1.6.7"
+    "@types/sanitize-html": "^2.16.0",
+    "axios": "^1.6.7",
+    "sanitize-html": "^2.17.0"
   }
 }

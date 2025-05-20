@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
 
 export interface BlockedNotification {
-    type: string;
+    type: 'info' | 'warning' | 'error';
     message: string;
     timestamp: number;
 }
+
+type InfoNotification = typeof vscode.window.showInformationMessage;
+type WarningNotification = typeof vscode.window.showWarningMessage;
+type ErrorNotification = typeof vscode.window.showErrorMessage;
+
+type NotificationMethod = InfoNotification | WarningNotification | ErrorNotification;
 
 export class NotificationBlocker {
     private isBlocking: boolean = false;
@@ -22,7 +28,6 @@ export class NotificationBlocker {
         this.statusBarItem.tooltip = 'Clique para ver notificações bloqueadas';
         this.statusBarItem.command = 'tdah-dev-helper.showBlockedNotifications';
         
-        // Inicializar imediatamente
         this.initialize();
     }
 
@@ -35,54 +40,41 @@ export class NotificationBlocker {
         const originalShowWarning = vscode.window.showWarningMessage;
         const originalShowError = vscode.window.showErrorMessage;
 
-        const blocker = this;
-
         // Handler para notificações
-        const handleNotification = function(
-            originalFn: typeof vscode.window.showInformationMessage,
+        const handleNotification = (
+            originalFn: NotificationMethod,
             message: string,
-            ...items: any[]
-        ): Thenable<any> {
-            if (blocker.isBlocking) {
-                // Determinar o tipo de notificação
-                let type = 'info';
+            ...args: any[]
+        ): any => {
+            if (this.isBlocking) {
+                let type: BlockedNotification['type'] = 'info';
                 if (originalFn === originalShowWarning) type = 'warning';
                 if (originalFn === originalShowError) type = 'error';
-
-                // Adicionar à lista de notificações bloqueadas
-                blocker.blockedNotifications.push({
+                this.blockedNotifications.push({
                     type,
                     message,
                     timestamp: Date.now()
                 });
-
-                // Atualizar contador na status bar
-                blocker.updateStatusBar();
-
-                // Retornar undefined para não mostrar a notificação
+                this.updateStatusBar();
                 return Promise.resolve(undefined);
             }
-
-            // Se não estiver bloqueando, mostrar a notificação normalmente
-            return originalFn(message, ...items);
+            return originalFn(message, ...args);
         };
 
         // Substituir métodos originais
-        vscode.window.showInformationMessage = function(message: string, ...items: any[]): any {
-            return handleNotification(originalShowInfo, message, ...items);
+        const createNotificationWrapper = (originalFn: NotificationMethod): NotificationMethod => {
+            return function(message: string, ...args: any[]): any {
+                return handleNotification(originalFn, message, ...args);
+            } as NotificationMethod;
         };
 
-        vscode.window.showWarningMessage = function(message: string, ...items: any[]): any {
-            return handleNotification(originalShowWarning, message, ...items);
-        };
-
-        vscode.window.showErrorMessage = function(message: string, ...items: any[]): any {
-            return handleNotification(originalShowError, message, ...items);
-        };
+        vscode.window.showInformationMessage = createNotificationWrapper(originalShowInfo);
+        vscode.window.showWarningMessage = createNotificationWrapper(originalShowWarning);
+        vscode.window.showErrorMessage = createNotificationWrapper(originalShowError);
 
         // Restaurar métodos originais ao desativar
         this.disposables.push({
-            dispose: () => {
+            dispose: (): void => {
                 vscode.window.showInformationMessage = originalShowInfo;
                 vscode.window.showWarningMessage = originalShowWarning;
                 vscode.window.showErrorMessage = originalShowError;

@@ -1,5 +1,4 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import * as vscode from 'vscode';
 import { Task as ApiTask, Subtask as ApiSubtask } from './types';
 import { TaskStatus } from '../tasks/tracker';
 
@@ -51,11 +50,9 @@ export interface ApiConfig {
 export class ApiClient {
     private client: AxiosInstance;
     private baseUrl: string;
-    private apiKey: string | undefined;
 
     constructor(baseUrl?: string) {
         this.baseUrl = baseUrl || 'https://api.tdah-dev-helper.com/v1';
-        this.apiKey = process.env.TDAH_API_KEY;
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 5000,
@@ -256,6 +253,5 @@ export class ApiClient {
 
     public dispose(): void {
         // Limpar recursos se necessário
-        this.apiKey = undefined;
     }
 } 
