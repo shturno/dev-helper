@@ -1,23 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { Task as ApiTask, Subtask as ApiSubtask } from './types';
 import { TaskStatus } from '../tasks/tracker';
-
-export interface Task {
-    id: number;
-    title: string;
-    description: string;
-    status: 'pending' | 'in_progress' | 'completed';
-    xpReward: number;
-    subtasks: Subtask[];
-}
-
-export interface Subtask {
-    id: number;
-    taskId: number;
-    title: string;
-    estimatedMinutes: number;
-    completed: boolean;
-}
+import { Task, Subtask, TaskUpdateData } from '../tasks/types';
 
 export interface UserData {
     id: number;
@@ -57,14 +41,6 @@ export interface ApiError {
     message: string;
     code?: string;
     status?: number;
-}
-
-export interface TaskUpdateData {
-    title?: string;
-    description?: string;
-    status?: TaskStatus;
-    xpReward?: number;
-    [key: string]: unknown;
 }
 
 export interface UserProfile {
@@ -261,6 +237,7 @@ export class ApiClient {
             typeof task.title === 'string' &&
             (!task.description || typeof task.description === 'string') &&
             Object.values(TaskStatus).includes(task.status) &&
+            typeof task.xpReward === 'number' &&
             Array.isArray(task.subtasks) &&
             task.subtasks.every(this.isValidSubtask) &&
             task.createdAt instanceof Date &&

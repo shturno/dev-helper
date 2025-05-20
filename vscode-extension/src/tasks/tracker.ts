@@ -1,42 +1,19 @@
 import * as vscode from 'vscode';
-import { sanitizeHtml, isValidInput, isValidTask, sanitizeTask, sanitizeForWebview } from '../utils/security';
+import { sanitizeHtml, isValidInput, sanitizeTask, sanitizeForWebview } from '../utils/security';
+import { Task, Subtask, TaskValidation } from './types';
 
 // Constantes de validação
 const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_SUBTASKS_PER_TASK = 20;
 const MAX_ESTIMATED_MINUTES = 480;
+const DEFAULT_XP_REWARD = 10;
 
 // Enum para status das tarefas
 export enum TaskStatus {
     PENDING = 'pending',
     IN_PROGRESS = 'in_progress',
     COMPLETED = 'completed'
-}
-
-// Interfaces
-interface Task {
-    id: number;
-    title: string;
-    description?: string;
-    status: TaskStatus;
-    subtasks: Subtask[];
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-interface Subtask {
-    id: number;
-    taskId: number;
-    title: string;
-    estimatedMinutes: number;
-    completed: boolean;
-}
-
-// Interface para validação de tarefas
-export interface TaskValidation {
-    isValid: boolean;
-    errors: string[];
 }
 
 export class TaskTracker {
@@ -51,7 +28,7 @@ export class TaskTracker {
             vscode.StatusBarAlignment.Left,
             100
         );
-        this.statusBarItem.command = 'tdah-dev-helper.showTaskDetails';
+        this.statusBarItem.command = 'tdah-dev-helper.selectTask';
         
         // Carregar tarefas salvas
         this.loadTasks();
@@ -62,13 +39,43 @@ export class TaskTracker {
         try {
             const savedTasks = this.context.globalState.get<Task[]>('tdah-tasks', []);
             // Validar e sanitizar tarefas carregadas
-            this.tasks = savedTasks
-                .filter(isValidTask)
-                .map(sanitizeTask);
+            this.tasks = savedTasks.filter((task): task is Task => {
+                if (!task || typeof task !== 'object') return false;
+                const t = task as Task;
+                return (
+                    typeof t.id === 'number' &&
+                    typeof t.title === 'string' &&
+                    t.title.length > 0 &&
+                    t.title.length <= MAX_TITLE_LENGTH &&
+                    (!t.description || (typeof t.description === 'string' && t.description.length <= MAX_DESCRIPTION_LENGTH)) &&
+                    Object.values(TaskStatus).includes(t.status) &&
+                    typeof t.xpReward === 'number' &&
+                    Array.isArray(t.subtasks) &&
+                    t.subtasks.length <= MAX_SUBTASKS_PER_TASK &&
+                    t.subtasks.every(this.isValidSubtask.bind(this)) &&
+                    t.createdAt instanceof Date &&
+                    t.updatedAt instanceof Date
+                );
+            });
         } catch (error) {
             console.error('Erro ao carregar tarefas:', error);
             vscode.window.showErrorMessage('Erro ao carregar tarefas salvas');
         }
+    }
+
+    private isValidSubtask(subtask: unknown): subtask is Subtask {
+        if (!subtask || typeof subtask !== 'object') return false;
+        const s = subtask as Subtask;
+        return (
+            typeof s.id === 'number' &&
+            typeof s.taskId === 'number' &&
+            typeof s.title === 'string' &&
+            s.title.length > 0 &&
+            typeof s.estimatedMinutes === 'number' &&
+            s.estimatedMinutes >= 0 &&
+            s.estimatedMinutes <= MAX_ESTIMATED_MINUTES &&
+            typeof s.completed === 'boolean'
+        );
     }
 
     private async saveTasks(): Promise<void> {
@@ -234,6 +241,7 @@ export class TaskTracker {
                 title: sanitizeHtml(title),
                 description: description ? sanitizeHtml(description) : '',
                 status: TaskStatus.PENDING,
+                xpReward: DEFAULT_XP_REWARD,
                 subtasks: [],
                 createdAt: new Date(),
                 updatedAt: new Date()

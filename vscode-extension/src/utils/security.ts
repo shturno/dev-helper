@@ -4,6 +4,7 @@
 
 import sanitizeHtmlLib from 'sanitize-html';
 import { TaskStatus } from '../tasks/tracker';
+import { Task, Subtask } from '../tasks/types';
 
 interface SecurityConfig {
     maxInputLength: number;
@@ -75,25 +76,6 @@ export function generateSecureId(): string {
     return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
 }
 
-export interface Task {
-    id: number;
-    title: string;
-    description?: string;
-    status: TaskStatus;
-    xpReward: number;
-    subtasks: Subtask[];
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-export interface Subtask {
-    id: number;
-    taskId: number;
-    title: string;
-    estimatedMinutes: number;
-    completed: boolean;
-}
-
 export interface SanitizedData {
     [key: string]: string | number | boolean | SanitizedData | SanitizedData[];
 }
@@ -108,9 +90,13 @@ export function isValidTask(task: unknown): task is Task {
         t.title.length > 0 &&
         t.title.length <= 100 &&
         (!t.description || (typeof t.description === 'string' && t.description.length <= 500)) &&
+        Object.values(TaskStatus).includes(t.status) &&
+        typeof t.xpReward === 'number' &&
         Array.isArray(t.subtasks) &&
         t.subtasks.length <= 20 &&
-        t.subtasks.every(isValidSubtask)
+        t.subtasks.every(isValidSubtask) &&
+        t.createdAt instanceof Date &&
+        t.updatedAt instanceof Date
     );
 }
 
