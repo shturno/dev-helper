@@ -16,5 +16,9 @@ module.exports = {
   ],
   transformIgnorePatterns: [
     '/node_modules/(?!sanitize-html)'
+  ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/dist/',
+    '<rootDir>/out/'
   ]
 }; 

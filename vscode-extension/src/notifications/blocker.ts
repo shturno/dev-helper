@@ -44,8 +44,8 @@ export class NotificationBlocker {
         const handleNotification = (
             originalFn: NotificationMethod,
             message: string,
-            ...args: any[]
-        ): any => {
+            ...args: (string | vscode.MessageItem)[]
+        ): unknown => {
             if (this.isBlocking) {
                 let type: BlockedNotification['type'] = 'info';
                 if (originalFn === originalShowWarning) type = 'warning';
@@ -58,12 +58,21 @@ export class NotificationBlocker {
                 this.updateStatusBar();
                 return Promise.resolve(undefined);
             }
-            return originalFn(message, ...args);
+            if (args.length === 0) {
+                return originalFn(message);
+            }
+            if (args.every(arg => typeof arg === 'string')) {
+                return (originalFn as (msg: string, ...items: string[]) => Thenable<string | undefined>)(message, ...(args as string[]));
+            }
+            if (args.every(arg => typeof arg === 'object')) {
+                return (originalFn as (msg: string, ...items: vscode.MessageItem[]) => Thenable<vscode.MessageItem | undefined>)(message, ...(args as vscode.MessageItem[]));
+            }
+            return originalFn(message);
         };
 
         // Substituir métodos originais
         const createNotificationWrapper = (originalFn: NotificationMethod): NotificationMethod => {
-            return function(message: string, ...args: any[]): any {
+            return function(message: string, ...args: (string | vscode.MessageItem)[]): unknown {
                 return handleNotification(originalFn, message, ...args);
             } as NotificationMethod;
         };

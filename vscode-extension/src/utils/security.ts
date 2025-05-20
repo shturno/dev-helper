@@ -3,6 +3,7 @@
  */
 
 import sanitizeHtmlLib from 'sanitize-html';
+import { TaskStatus } from '../tasks/tracker';
 
 interface SecurityConfig {
     maxInputLength: number;
@@ -74,76 +75,89 @@ export function generateSecureId(): string {
     return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
 }
 
-/**
- * Valida se um objeto é uma tarefa válida
- */
-export function isValidTask(task: any): boolean {
+export interface Task {
+    id: number;
+    title: string;
+    description?: string;
+    status: TaskStatus;
+    xpReward: number;
+    subtasks: Subtask[];
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+export interface Subtask {
+    id: number;
+    taskId: number;
+    title: string;
+    estimatedMinutes: number;
+    completed: boolean;
+}
+
+export interface SanitizedData {
+    [key: string]: string | number | boolean | SanitizedData | SanitizedData[];
+}
+
+export function isValidTask(task: unknown): task is Task {
+    if (!task || typeof task !== 'object') return false;
+
+    const t = task as Task;
     return (
-        task &&
-        typeof task === 'object' &&
-        typeof task.id === 'number' &&
-        typeof task.title === 'string' &&
-        task.title.length > 0 &&
-        task.title.length <= 100 &&
-        (!task.description || typeof task.description === 'string') &&
-        task.description?.length <= 500 &&
-        Array.isArray(task.subtasks) &&
-        task.subtasks.length <= 20 &&
-        task.subtasks.every(isValidSubtask)
+        typeof t.id === 'number' &&
+        typeof t.title === 'string' &&
+        t.title.length > 0 &&
+        t.title.length <= 100 &&
+        (!t.description || (typeof t.description === 'string' && t.description.length <= 500)) &&
+        Array.isArray(t.subtasks) &&
+        t.subtasks.length <= 20 &&
+        t.subtasks.every(isValidSubtask)
     );
 }
 
-/**
- * Valida se um objeto é uma subtarefa válida
- */
-export function isValidSubtask(subtask: any): boolean {
+export function isValidSubtask(subtask: unknown): subtask is Subtask {
+    if (!subtask || typeof subtask !== 'object') return false;
+
+    const s = subtask as Subtask;
     return (
-        subtask &&
-        typeof subtask === 'object' &&
-        typeof subtask.id === 'number' &&
-        typeof subtask.taskId === 'number' &&
-        typeof subtask.title === 'string' &&
-        subtask.title.length > 0 &&
-        typeof subtask.estimatedMinutes === 'number' &&
-        subtask.estimatedMinutes >= 0 &&
-        subtask.estimatedMinutes <= 480 &&
-        typeof subtask.completed === 'boolean'
+        typeof s.id === 'number' &&
+        typeof s.taskId === 'number' &&
+        typeof s.title === 'string' &&
+        s.title.length > 0 &&
+        typeof s.estimatedMinutes === 'number' &&
+        s.estimatedMinutes >= 0 &&
+        s.estimatedMinutes <= 480 &&
+        typeof s.completed === 'boolean'
     );
 }
 
-/**
- * Sanitiza um objeto de tarefa antes de salvar
- */
-export function sanitizeTask(task: any): any {
-    if (!task) return null;
+export function sanitizeTask(task: unknown): Task | null {
+    if (!task || typeof task !== 'object') return null;
 
+    const t = task as Task;
     return {
-        ...task,
-        title: sanitizeHtml(task.title || ''),
-        description: task.description ? sanitizeHtml(task.description) : '',
-        subtasks: (task.subtasks || []).map((subtask: any) => ({
+        ...t,
+        title: sanitizeHtml(t.title || ''),
+        description: t.description ? sanitizeHtml(t.description) : '',
+        subtasks: (t.subtasks || []).map((subtask: Subtask) => ({
             ...subtask,
             title: sanitizeHtml(subtask.title || '')
         }))
     };
 }
 
-/**
- * Sanitiza dados antes de enviar para o webview
- */
-export function sanitizeForWebview(data: any): any {
+export function sanitizeForWebview(data: unknown): SanitizedData | SanitizedData[] | string | number | boolean {
     if (Array.isArray(data)) {
-        return data.map(sanitizeForWebview);
+        return data.map(sanitizeForWebview) as SanitizedData[];
     }
     
     if (data && typeof data === 'object') {
-        const sanitized: any = {};
+        const sanitized: SanitizedData = {};
         for (const [key, value] of Object.entries(data)) {
             // Remover dados sensíveis
             if (['createdBy', 'machineId', 'token'].includes(key)) {
                 continue;
             }
-            sanitized[key] = sanitizeForWebview(value);
+            sanitized[key] = sanitizeForWebview(value) as SanitizedData[keyof SanitizedData];
         }
         return sanitized;
     }
@@ -152,7 +166,7 @@ export function sanitizeForWebview(data: any): any {
         return sanitizeHtml(data);
     }
     
-    return data;
+    return data as string | number | boolean;
 }
 
 /**

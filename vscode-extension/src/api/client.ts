@@ -47,6 +47,33 @@ export interface ApiConfig {
     timeout?: number;
 }
 
+export interface ApiResponse<T> {
+    data: T;
+    message?: string;
+    status: number;
+}
+
+export interface ApiError {
+    message: string;
+    code?: string;
+    status?: number;
+}
+
+export interface TaskUpdateData {
+    title?: string;
+    description?: string;
+    status?: TaskStatus;
+    xpReward?: number;
+    [key: string]: unknown;
+}
+
+export interface UserProfile {
+    id: number;
+    name: string;
+    email: string;
+    preferences?: Record<string, unknown>;
+}
+
 export class ApiClient {
     private client: AxiosInstance;
     private baseUrl: string;
@@ -64,18 +91,18 @@ export class ApiClient {
 
     private async request<T>(config: AxiosRequestConfig): Promise<T> {
         try {
-            const response = await this.client.request<T>(config);
-            return response.data;
+            const response = await this.client.request<ApiResponse<T>>(config);
+            return response.data.data;
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                const message = error.response?.data?.message || error.message;
-                throw new Error(`API Error: ${message}`);
+                const apiError = error.response?.data as ApiError;
+                throw new Error(`API Error: ${apiError?.message || error.message}`);
             }
             throw error;
         }
     }
 
-    public async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+    public async get<T>(endpoint: string, params?: Record<string, string | number | boolean>): Promise<T> {
         return this.request<T>({
             method: 'GET',
             url: endpoint,
@@ -83,7 +110,7 @@ export class ApiClient {
         });
     }
 
-    public async post<T>(endpoint: string, data?: any): Promise<T> {
+    public async post<T>(endpoint: string, data?: Record<string, unknown>): Promise<T> {
         return this.request<T>({
             method: 'POST',
             url: endpoint,
@@ -91,7 +118,7 @@ export class ApiClient {
         });
     }
 
-    public async put<T>(endpoint: string, data?: any): Promise<T> {
+    public async put<T, D extends Record<string, unknown>>(endpoint: string, data: D): Promise<T> {
         return this.request<T>({
             method: 'PUT',
             url: endpoint,
@@ -107,12 +134,12 @@ export class ApiClient {
     }
 
     // Métodos específicos da API
-    public async getActiveTask(): Promise<any> {
-        return this.get('/tasks/active');
+    public async getActiveTask(): Promise<ApiTask> {
+        return this.get<ApiTask>('/tasks/active');
     }
 
-    public async setActiveTask(taskId: number): Promise<any> {
-        return this.put('/tasks/active', { taskId });
+    public async setActiveTask(taskId: number): Promise<ApiTask> {
+        return this.put<ApiTask, { taskId: number }>('/tasks/active', { taskId });
     }
 
     public async createTask(task: Omit<ApiTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiTask> {
@@ -131,7 +158,7 @@ export class ApiClient {
             throw new Error('Erro ao criar tarefa na API');
         }
 
-        const data = await response.json();
+        const data = await response.json() as ApiTask;
         if (!this.isValidTask(data)) {
             throw new Error('Resposta inválida da API');
         }
@@ -139,24 +166,24 @@ export class ApiClient {
         return data;
     }
 
-    public async updateTask(id: string, task: any): Promise<any> {
-        return this.put(`/tasks/${id}`, task);
+    public async updateTask(id: string, task: TaskUpdateData): Promise<ApiTask> {
+        return this.put<ApiTask, TaskUpdateData>(`/tasks/${id}`, task);
     }
 
     public async deleteTask(id: string): Promise<void> {
-        return this.delete(`/tasks/${id}`);
+        return this.delete<void>(`/tasks/${id}`);
     }
 
-    public async getTasks(): Promise<any[]> {
-        return this.get('/tasks');
+    public async getTasks(): Promise<ApiTask[]> {
+        return this.get<ApiTask[]>('/tasks');
     }
 
-    public async getUserProfile(): Promise<any> {
-        return this.get('/user/profile');
+    public async getUserProfile(): Promise<UserProfile> {
+        return this.get<UserProfile>('/user/profile');
     }
 
-    public async updateUserProfile(profile: any): Promise<any> {
-        return this.put('/user/profile', profile);
+    public async updateUserProfile(profile: Partial<UserProfile>): Promise<UserProfile> {
+        return this.put<UserProfile, Partial<UserProfile>>('/user/profile', profile);
     }
 
     // Métodos de autenticação
@@ -177,8 +204,11 @@ export class ApiClient {
         return this.post<Subtask[]>(`/tasks/${taskId}/decompose`);
     }
 
-    public async completeSubtask(subtaskId: number): Promise<{ xp_earned: number, all_completed: boolean }> {
-        return this.put<{ xp_earned: number, all_completed: boolean }>(`/subtasks/${subtaskId}/complete`);
+    public async completeSubtask(subtaskId: number): Promise<{ xp_earned: number; all_completed: boolean }> {
+        return this.put<{ xp_earned: number; all_completed: boolean }, { subtaskId: number }>(
+            `/subtasks/${subtaskId}/complete`,
+            { subtaskId }
+        );
     }
 
     // Métodos de produtividade
