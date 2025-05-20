@@ -1,0 +1,80 @@
+{
+  "name": "TDAH Focus Light",
+  "type": "light",
+  "colors": {
+    "editor.background": "#F8F9FA",
+    "editor.foreground": "#2C3E50",
+    "editor.lineHighlightBackground": "#E8F0FE",
+    "editor.selectionBackground": "#BBDEFB",
+    "editorCursor.foreground": "#2196F3",
+    "editorWhitespace.foreground": "#E0E0E0",
+    "editorIndentGuide.background": "#E0E0E0",
+    "editorIndentGuide.activeBackground": "#BBDEFB",
+    "editorLineNumber.foreground": "#90A4AE",
+    "editorLineNumber.activeForeground": "#2196F3",
+    "editorBracketMatch.background": "#BBDEFB",
+    "editorBracketMatch.border": "#2196F3",
+    "activityBar.background": "#FFFFFF",
+    "activityBar.foreground": "#2C3E50",
+    "activityBarBadge.background": "#2196F3",
+    "activityBarBadge.foreground": "#FFFFFF",
+    "sideBar.background": "#FFFFFF",
+    "sideBar.foreground": "#2C3E50",
+    "sideBarTitle.foreground": "#2C3E50",
+    "statusBar.background": "#FFFFFF",
+    "statusBar.foreground": "#2C3E50",
+    "titleBar.activeBackground": "#FFFFFF",
+    "titleBar.activeForeground": "#2C3E50",
+    "tab.activeBackground": "#FFFFFF",
+    "tab.activeForeground": "#2196F3",
+    "tab.inactiveBackground": "#F5F5F5",
+    "tab.inactiveForeground": "#90A4AE"
+  },
+  "tokenColors": [
+    {
+      "name": "Keywords",
+      "scope": ["keyword", "storage", "modifier"],
+      "settings": {
+        "foreground": "#1976D2",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Functions",
+      "scope": ["entity.name.function", "support.function"],
+      "settings": {
+        "foreground": "#2196F3"
+      }
+    },
+    {
+      "name": "Strings",
+      "scope": ["string", "string.template"],
+      "settings": {
+        "foreground": "#388E3C"
+      }
+    },
+    {
+      "name": "Comments",
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": {
+        "foreground": "#90A4AE",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Variables",
+      "scope": ["variable", "variable.other"],
+      "settings": {
+        "foreground": "#2C3E50"
+      }
+    },
+    {
+      "name": "Types",
+      "scope": ["entity.name.type", "support.type"],
+      "settings": {
+        "foreground": "#7B1FA2",
+        "fontStyle": "bold"
+      }
+    }
+  ]
+} 

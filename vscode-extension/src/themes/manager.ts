@@ -1,71 +1,12 @@
 import * as vscode from 'vscode';
 
-export interface ThemeConfig {
-    id: string;
+interface ThemeDefinition {
     name: string;
-    description: string;
-    type: 'light' | 'dark' | 'high-contrast';
+    type: 'light' | 'dark';
     colors: {
-        editorBackground: string;
-        editorForeground: string;
-        activityBarBackground: string;
-        activityBarForeground: string;
-        statusBarBackground: string;
-        statusBarForeground: string;
-        titleBarBackground: string;
-        titleBarForeground: string;
-        sideBarBackground: string;
-        sideBarForeground: string;
-        focusBorder: string;
-        selectionBackground: string;
-        selectionForeground: string;
-        lineHighlightBackground: string;
-        lineHighlightBorder: string;
-        cursorColor: string;
-        wordHighlightBackground: string;
-        wordHighlightBorder: string;
-        findMatchBackground: string;
-        findMatchBorder: string;
-        findRangeHighlightBackground: string;
-        findRangeHighlightBorder: string;
-        inactiveSelectionBackground: string;
-        inactiveSelectionForeground: string;
-        minimapBackground: string;
-        minimapSelectionHighlight: string;
-        minimapFindMatchHighlight: string;
-        minimapErrorHighlight: string;
-        minimapWarningHighlight: string;
-        minimapGutterAddedBackground: string;
-        minimapGutterModifiedBackground: string;
-        minimapGutterDeletedBackground: string;
-        editorGroupHeaderBackground: string;
-        editorGroupHeaderForeground: string;
-        editorGroupHeaderTabsBackground: string;
-        editorGroupHeaderTabsForeground: string;
-        editorGroupHeaderTabsBorder: string;
-        editorGroupHeaderTabsActiveBackground: string;
-        editorGroupHeaderTabsActiveForeground: string;
-        editorGroupHeaderTabsActiveBorder: string;
-        editorGroupHeaderTabsInactiveBackground: string;
-        editorGroupHeaderTabsInactiveForeground: string;
-        editorGroupHeaderTabsInactiveBorder: string;
-        editorGroupHeaderTabsHoverBackground: string;
-        editorGroupHeaderTabsHoverForeground: string;
-        editorGroupHeaderTabsHoverBorder: string;
-        editorGroupHeaderTabsUnfocusedBackground: string;
-        editorGroupHeaderTabsUnfocusedForeground: string;
-        editorGroupHeaderTabsUnfocusedBorder: string;
-        editorGroupHeaderTabsUnfocusedActiveBackground: string;
-        editorGroupHeaderTabsUnfocusedActiveForeground: string;
-        editorGroupHeaderTabsUnfocusedActiveBorder: string;
-        editorGroupHeaderTabsUnfocusedInactiveBackground: string;
-        editorGroupHeaderTabsUnfocusedInactiveForeground: string;
-        editorGroupHeaderTabsUnfocusedInactiveBorder: string;
-        editorGroupHeaderTabsUnfocusedHoverBackground: string;
-        editorGroupHeaderTabsUnfocusedHoverForeground: string;
-        editorGroupHeaderTabsUnfocusedHoverBorder: string;
+        [key: string]: string;
     };
-    tokenColors: Array<{
+    tokenColors: {
         name: string;
         scope: string[];
         settings: {
@@ -73,88 +14,65 @@ export interface ThemeConfig {
             background?: string;
             fontStyle?: string;
         };
-    }>;
+    }[];
 }
 
 export class ThemeManager {
     private static instance: ThemeManager;
-    private config: vscode.WorkspaceConfiguration;
     private disposables: vscode.Disposable[] = [];
-    private currentTheme: ThemeConfig | null = null;
-    private isInitialized: boolean = false;
+    private themes: ThemeDefinition[] = [];
 
-    private readonly themes: ThemeConfig[] = [
-        {
-            id: 'tdah-light',
-            name: 'TDAH Light',
-            description: 'Tema claro otimizado para desenvolvedores com TDAH',
+    private constructor() {
+        this.initializeThemes();
+    }
+
+    public static getInstance(): ThemeManager {
+        if (!ThemeManager.instance) {
+            ThemeManager.instance = new ThemeManager();
+        }
+        return ThemeManager.instance;
+    }
+
+    private initializeThemes(): void {
+        // Tema "Focus Light" - Tema claro otimizado para foco
+        this.themes.push({
+            name: 'TDAH Focus Light',
             type: 'light',
             colors: {
-                editorBackground: '#FFFFFF',
-                editorForeground: '#2C3E50',
-                activityBarBackground: '#F5F5F5',
-                activityBarForeground: '#2C3E50',
-                statusBarBackground: '#F5F5F5',
-                statusBarForeground: '#2C3E50',
-                titleBarBackground: '#F5F5F5',
-                titleBarForeground: '#2C3E50',
-                sideBarBackground: '#F5F5F5',
-                sideBarForeground: '#2C3E50',
-                focusBorder: '#3498DB',
-                selectionBackground: '#3498DB33',
-                selectionForeground: '#2C3E50',
-                lineHighlightBackground: '#F8F9FA',
-                lineHighlightBorder: '#E9ECEF',
-                cursorColor: '#3498DB',
-                wordHighlightBackground: '#3498DB22',
-                wordHighlightBorder: '#3498DB44',
-                findMatchBackground: '#F1C40F33',
-                findMatchBorder: '#F1C40F66',
-                findRangeHighlightBackground: '#F1C40F22',
-                findRangeHighlightBorder: '#F1C40F44',
-                inactiveSelectionBackground: '#3498DB22',
-                inactiveSelectionForeground: '#2C3E50',
-                minimapBackground: '#F5F5F5',
-                minimapSelectionHighlight: '#3498DB33',
-                minimapFindMatchHighlight: '#F1C40F33',
-                minimapErrorHighlight: '#E74C3C33',
-                minimapWarningHighlight: '#F39C1233',
-                minimapGutterAddedBackground: '#2ECC7133',
-                minimapGutterModifiedBackground: '#F1C40F33',
-                minimapGutterDeletedBackground: '#E74C3C33',
-                editorGroupHeaderBackground: '#F5F5F5',
-                editorGroupHeaderForeground: '#2C3E50',
-                editorGroupHeaderTabsBackground: '#F5F5F5',
-                editorGroupHeaderTabsForeground: '#2C3E50',
-                editorGroupHeaderTabsBorder: '#E9ECEF',
-                editorGroupHeaderTabsActiveBackground: '#FFFFFF',
-                editorGroupHeaderTabsActiveForeground: '#2C3E50',
-                editorGroupHeaderTabsActiveBorder: '#3498DB',
-                editorGroupHeaderTabsInactiveBackground: '#F5F5F5',
-                editorGroupHeaderTabsInactiveForeground: '#95A5A6',
-                editorGroupHeaderTabsInactiveBorder: '#E9ECEF',
-                editorGroupHeaderTabsHoverBackground: '#FFFFFF',
-                editorGroupHeaderTabsHoverForeground: '#2C3E50',
-                editorGroupHeaderTabsHoverBorder: '#3498DB',
-                editorGroupHeaderTabsUnfocusedBackground: '#F5F5F5',
-                editorGroupHeaderTabsUnfocusedForeground: '#95A5A6',
-                editorGroupHeaderTabsUnfocusedBorder: '#E9ECEF',
-                editorGroupHeaderTabsUnfocusedActiveBackground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedActiveForeground: '#2C3E50',
-                editorGroupHeaderTabsUnfocusedActiveBorder: '#3498DB',
-                editorGroupHeaderTabsUnfocusedInactiveBackground: '#F5F5F5',
-                editorGroupHeaderTabsUnfocusedInactiveForeground: '#95A5A6',
-                editorGroupHeaderTabsUnfocusedInactiveBorder: '#E9ECEF',
-                editorGroupHeaderTabsUnfocusedHoverBackground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedHoverForeground: '#2C3E50',
-                editorGroupHeaderTabsUnfocusedHoverBorder: '#3498DB'
+                'editor.background': '#F8F9FA',
+                'editor.foreground': '#2C3E50',
+                'editor.lineHighlightBackground': '#E8F0FE',
+                'editor.selectionBackground': '#BBDEFB',
+                'editorCursor.foreground': '#2196F3',
+                'editorWhitespace.foreground': '#E0E0E0',
+                'editorIndentGuide.background': '#E0E0E0',
+                'editorIndentGuide.activeBackground': '#BBDEFB',
+                'editorLineNumber.foreground': '#90A4AE',
+                'editorLineNumber.activeForeground': '#2196F3',
+                'editorBracketMatch.background': '#BBDEFB',
+                'editorBracketMatch.border': '#2196F3',
+                'activityBar.background': '#FFFFFF',
+                'activityBar.foreground': '#2C3E50',
+                'activityBarBadge.background': '#2196F3',
+                'activityBarBadge.foreground': '#FFFFFF',
+                'sideBar.background': '#FFFFFF',
+                'sideBar.foreground': '#2C3E50',
+                'sideBarTitle.foreground': '#2C3E50',
+                'statusBar.background': '#FFFFFF',
+                'statusBar.foreground': '#2C3E50',
+                'titleBar.activeBackground': '#FFFFFF',
+                'titleBar.activeForeground': '#2C3E50',
+                'tab.activeBackground': '#FFFFFF',
+                'tab.activeForeground': '#2196F3',
+                'tab.inactiveBackground': '#F5F5F5',
+                'tab.inactiveForeground': '#90A4AE'
             },
             tokenColors: [
                 {
                     name: 'Keywords',
-                    scope: ['keyword', 'storage', 'type'],
+                    scope: ['keyword', 'storage', 'modifier'],
                     settings: {
-                        foreground: '#3498DB',
+                        foreground: '#1976D2',
                         fontStyle: 'bold'
                     }
                 },
@@ -162,22 +80,21 @@ export class ThemeManager {
                     name: 'Functions',
                     scope: ['entity.name.function', 'support.function'],
                     settings: {
-                        foreground: '#2ECC71',
-                        fontStyle: 'bold'
+                        foreground: '#2196F3'
                     }
                 },
                 {
                     name: 'Strings',
                     scope: ['string', 'string.template'],
                     settings: {
-                        foreground: '#E67E22'
+                        foreground: '#388E3C'
                     }
                 },
                 {
                     name: 'Comments',
                     scope: ['comment', 'punctuation.definition.comment'],
                     settings: {
-                        foreground: '#95A5A6',
+                        foreground: '#90A4AE',
                         fontStyle: 'italic'
                     }
                 },
@@ -189,85 +106,55 @@ export class ThemeManager {
                     }
                 },
                 {
-                    name: 'Numbers',
-                    scope: ['constant.numeric'],
+                    name: 'Types',
+                    scope: ['entity.name.type', 'support.type'],
                     settings: {
-                        foreground: '#9B59B6'
+                        foreground: '#7B1FA2',
+                        fontStyle: 'bold'
                     }
                 }
             ]
-        },
-        {
-            id: 'tdah-dark',
-            name: 'TDAH Dark',
-            description: 'Tema escuro otimizado para desenvolvedores com TDAH',
+        });
+
+        // Tema "Focus Dark" - Tema escuro otimizado para foco
+        this.themes.push({
+            name: 'TDAH Focus Dark',
             type: 'dark',
             colors: {
-                editorBackground: '#1E1E1E',
-                editorForeground: '#ECF0F1',
-                activityBarBackground: '#252526',
-                activityBarForeground: '#ECF0F1',
-                statusBarBackground: '#252526',
-                statusBarForeground: '#ECF0F1',
-                titleBarBackground: '#252526',
-                titleBarForeground: '#ECF0F1',
-                sideBarBackground: '#252526',
-                sideBarForeground: '#ECF0F1',
-                focusBorder: '#3498DB',
-                selectionBackground: '#3498DB33',
-                selectionForeground: '#ECF0F1',
-                lineHighlightBackground: '#2C2C2C',
-                lineHighlightBorder: '#3C3C3C',
-                cursorColor: '#3498DB',
-                wordHighlightBackground: '#3498DB22',
-                wordHighlightBorder: '#3498DB44',
-                findMatchBackground: '#F1C40F33',
-                findMatchBorder: '#F1C40F66',
-                findRangeHighlightBackground: '#F1C40F22',
-                findRangeHighlightBorder: '#F1C40F44',
-                inactiveSelectionBackground: '#3498DB22',
-                inactiveSelectionForeground: '#ECF0F1',
-                minimapBackground: '#252526',
-                minimapSelectionHighlight: '#3498DB33',
-                minimapFindMatchHighlight: '#F1C40F33',
-                minimapErrorHighlight: '#E74C3C33',
-                minimapWarningHighlight: '#F39C1233',
-                minimapGutterAddedBackground: '#2ECC7133',
-                minimapGutterModifiedBackground: '#F1C40F33',
-                minimapGutterDeletedBackground: '#E74C3C33',
-                editorGroupHeaderBackground: '#252526',
-                editorGroupHeaderForeground: '#ECF0F1',
-                editorGroupHeaderTabsBackground: '#252526',
-                editorGroupHeaderTabsForeground: '#ECF0F1',
-                editorGroupHeaderTabsBorder: '#3C3C3C',
-                editorGroupHeaderTabsActiveBackground: '#1E1E1E',
-                editorGroupHeaderTabsActiveForeground: '#ECF0F1',
-                editorGroupHeaderTabsActiveBorder: '#3498DB',
-                editorGroupHeaderTabsInactiveBackground: '#252526',
-                editorGroupHeaderTabsInactiveForeground: '#95A5A6',
-                editorGroupHeaderTabsInactiveBorder: '#3C3C3C',
-                editorGroupHeaderTabsHoverBackground: '#1E1E1E',
-                editorGroupHeaderTabsHoverForeground: '#ECF0F1',
-                editorGroupHeaderTabsHoverBorder: '#3498DB',
-                editorGroupHeaderTabsUnfocusedBackground: '#252526',
-                editorGroupHeaderTabsUnfocusedForeground: '#95A5A6',
-                editorGroupHeaderTabsUnfocusedBorder: '#3C3C3C',
-                editorGroupHeaderTabsUnfocusedActiveBackground: '#1E1E1E',
-                editorGroupHeaderTabsUnfocusedActiveForeground: '#ECF0F1',
-                editorGroupHeaderTabsUnfocusedActiveBorder: '#3498DB',
-                editorGroupHeaderTabsUnfocusedInactiveBackground: '#252526',
-                editorGroupHeaderTabsUnfocusedInactiveForeground: '#95A5A6',
-                editorGroupHeaderTabsUnfocusedInactiveBorder: '#3C3C3C',
-                editorGroupHeaderTabsUnfocusedHoverBackground: '#1E1E1E',
-                editorGroupHeaderTabsUnfocusedHoverForeground: '#ECF0F1',
-                editorGroupHeaderTabsUnfocusedHoverBorder: '#3498DB'
+                'editor.background': '#1A1A1A',
+                'editor.foreground': '#E0E0E0',
+                'editor.lineHighlightBackground': '#2C2C2C',
+                'editor.selectionBackground': '#3D5AFE',
+                'editorCursor.foreground': '#64B5F6',
+                'editorWhitespace.foreground': '#2C2C2C',
+                'editorIndentGuide.background': '#2C2C2C',
+                'editorIndentGuide.activeBackground': '#3D5AFE',
+                'editorLineNumber.foreground': '#757575',
+                'editorLineNumber.activeForeground': '#64B5F6',
+                'editorBracketMatch.background': '#3D5AFE',
+                'editorBracketMatch.border': '#64B5F6',
+                'activityBar.background': '#1A1A1A',
+                'activityBar.foreground': '#E0E0E0',
+                'activityBarBadge.background': '#64B5F6',
+                'activityBarBadge.foreground': '#FFFFFF',
+                'sideBar.background': '#1A1A1A',
+                'sideBar.foreground': '#E0E0E0',
+                'sideBarTitle.foreground': '#E0E0E0',
+                'statusBar.background': '#1A1A1A',
+                'statusBar.foreground': '#E0E0E0',
+                'titleBar.activeBackground': '#1A1A1A',
+                'titleBar.activeForeground': '#E0E0E0',
+                'tab.activeBackground': '#1A1A1A',
+                'tab.activeForeground': '#64B5F6',
+                'tab.inactiveBackground': '#2C2C2C',
+                'tab.inactiveForeground': '#757575'
             },
             tokenColors: [
                 {
                     name: 'Keywords',
-                    scope: ['keyword', 'storage', 'type'],
+                    scope: ['keyword', 'storage', 'modifier'],
                     settings: {
-                        foreground: '#3498DB',
+                        foreground: '#64B5F6',
                         fontStyle: 'bold'
                     }
                 },
@@ -275,22 +162,21 @@ export class ThemeManager {
                     name: 'Functions',
                     scope: ['entity.name.function', 'support.function'],
                     settings: {
-                        foreground: '#2ECC71',
-                        fontStyle: 'bold'
+                        foreground: '#81D4FA'
                     }
                 },
                 {
                     name: 'Strings',
                     scope: ['string', 'string.template'],
                     settings: {
-                        foreground: '#E67E22'
+                        foreground: '#A5D6A7'
                     }
                 },
                 {
                     name: 'Comments',
                     scope: ['comment', 'punctuation.definition.comment'],
                     settings: {
-                        foreground: '#95A5A6',
+                        foreground: '#757575',
                         fontStyle: 'italic'
                     }
                 },
@@ -298,89 +184,59 @@ export class ThemeManager {
                     name: 'Variables',
                     scope: ['variable', 'variable.other'],
                     settings: {
-                        foreground: '#ECF0F1'
+                        foreground: '#E0E0E0'
                     }
                 },
                 {
-                    name: 'Numbers',
-                    scope: ['constant.numeric'],
+                    name: 'Types',
+                    scope: ['entity.name.type', 'support.type'],
                     settings: {
-                        foreground: '#9B59B6'
+                        foreground: '#CE93D8',
+                        fontStyle: 'bold'
                     }
                 }
             ]
-        },
-        {
-            id: 'tdah-high-contrast',
-            name: 'TDAH High Contrast',
-            description: 'Tema de alto contraste otimizado para desenvolvedores com TDAH',
-            type: 'high-contrast',
+        });
+
+        // Tema "Calm" - Tema suave para reduzir estresse visual
+        this.themes.push({
+            name: 'TDAH Calm',
+            type: 'light',
             colors: {
-                editorBackground: '#000000',
-                editorForeground: '#FFFFFF',
-                activityBarBackground: '#000000',
-                activityBarForeground: '#FFFFFF',
-                statusBarBackground: '#000000',
-                statusBarForeground: '#FFFFFF',
-                titleBarBackground: '#000000',
-                titleBarForeground: '#FFFFFF',
-                sideBarBackground: '#000000',
-                sideBarForeground: '#FFFFFF',
-                focusBorder: '#00FF00',
-                selectionBackground: '#00FF0033',
-                selectionForeground: '#FFFFFF',
-                lineHighlightBackground: '#1A1A1A',
-                lineHighlightBorder: '#00FF00',
-                cursorColor: '#00FF00',
-                wordHighlightBackground: '#00FF0022',
-                wordHighlightBorder: '#00FF0044',
-                findMatchBackground: '#FFFF0033',
-                findMatchBorder: '#FFFF0066',
-                findRangeHighlightBackground: '#FFFF0022',
-                findRangeHighlightBorder: '#FFFF0044',
-                inactiveSelectionBackground: '#00FF0022',
-                inactiveSelectionForeground: '#FFFFFF',
-                minimapBackground: '#000000',
-                minimapSelectionHighlight: '#00FF0033',
-                minimapFindMatchHighlight: '#FFFF0033',
-                minimapErrorHighlight: '#FF000033',
-                minimapWarningHighlight: '#FFFF0033',
-                minimapGutterAddedBackground: '#00FF0033',
-                minimapGutterModifiedBackground: '#FFFF0033',
-                minimapGutterDeletedBackground: '#FF000033',
-                editorGroupHeaderBackground: '#000000',
-                editorGroupHeaderForeground: '#FFFFFF',
-                editorGroupHeaderTabsBackground: '#000000',
-                editorGroupHeaderTabsForeground: '#FFFFFF',
-                editorGroupHeaderTabsBorder: '#00FF00',
-                editorGroupHeaderTabsActiveBackground: '#1A1A1A',
-                editorGroupHeaderTabsActiveForeground: '#FFFFFF',
-                editorGroupHeaderTabsActiveBorder: '#00FF00',
-                editorGroupHeaderTabsInactiveBackground: '#000000',
-                editorGroupHeaderTabsInactiveForeground: '#FFFFFF',
-                editorGroupHeaderTabsInactiveBorder: '#00FF00',
-                editorGroupHeaderTabsHoverBackground: '#1A1A1A',
-                editorGroupHeaderTabsHoverForeground: '#FFFFFF',
-                editorGroupHeaderTabsHoverBorder: '#00FF00',
-                editorGroupHeaderTabsUnfocusedBackground: '#000000',
-                editorGroupHeaderTabsUnfocusedForeground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedBorder: '#00FF00',
-                editorGroupHeaderTabsUnfocusedActiveBackground: '#1A1A1A',
-                editorGroupHeaderTabsUnfocusedActiveForeground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedActiveBorder: '#00FF00',
-                editorGroupHeaderTabsUnfocusedInactiveBackground: '#000000',
-                editorGroupHeaderTabsUnfocusedInactiveForeground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedInactiveBorder: '#00FF00',
-                editorGroupHeaderTabsUnfocusedHoverBackground: '#1A1A1A',
-                editorGroupHeaderTabsUnfocusedHoverForeground: '#FFFFFF',
-                editorGroupHeaderTabsUnfocusedHoverBorder: '#00FF00'
+                'editor.background': '#F5F5F5',
+                'editor.foreground': '#4A4A4A',
+                'editor.lineHighlightBackground': '#E8EAF6',
+                'editor.selectionBackground': '#C5CAE9',
+                'editorCursor.foreground': '#5C6BC0',
+                'editorWhitespace.foreground': '#E0E0E0',
+                'editorIndentGuide.background': '#E0E0E0',
+                'editorIndentGuide.activeBackground': '#C5CAE9',
+                'editorLineNumber.foreground': '#9E9E9E',
+                'editorLineNumber.activeForeground': '#5C6BC0',
+                'editorBracketMatch.background': '#C5CAE9',
+                'editorBracketMatch.border': '#5C6BC0',
+                'activityBar.background': '#F5F5F5',
+                'activityBar.foreground': '#4A4A4A',
+                'activityBarBadge.background': '#5C6BC0',
+                'activityBarBadge.foreground': '#FFFFFF',
+                'sideBar.background': '#F5F5F5',
+                'sideBar.foreground': '#4A4A4A',
+                'sideBarTitle.foreground': '#4A4A4A',
+                'statusBar.background': '#F5F5F5',
+                'statusBar.foreground': '#4A4A4A',
+                'titleBar.activeBackground': '#F5F5F5',
+                'titleBar.activeForeground': '#4A4A4A',
+                'tab.activeBackground': '#F5F5F5',
+                'tab.activeForeground': '#5C6BC0',
+                'tab.inactiveBackground': '#EEEEEE',
+                'tab.inactiveForeground': '#9E9E9E'
             },
             tokenColors: [
                 {
                     name: 'Keywords',
-                    scope: ['keyword', 'storage', 'type'],
+                    scope: ['keyword', 'storage', 'modifier'],
                     settings: {
-                        foreground: '#00FF00',
+                        foreground: '#5C6BC0',
                         fontStyle: 'bold'
                     }
                 },
@@ -388,22 +244,21 @@ export class ThemeManager {
                     name: 'Functions',
                     scope: ['entity.name.function', 'support.function'],
                     settings: {
-                        foreground: '#00FFFF',
-                        fontStyle: 'bold'
+                        foreground: '#7986CB'
                     }
                 },
                 {
                     name: 'Strings',
                     scope: ['string', 'string.template'],
                     settings: {
-                        foreground: '#FFFF00'
+                        foreground: '#81C784'
                     }
                 },
                 {
                     name: 'Comments',
                     scope: ['comment', 'punctuation.definition.comment'],
                     settings: {
-                        foreground: '#808080',
+                        foreground: '#9E9E9E',
                         fontStyle: 'italic'
                     }
                 },
@@ -411,36 +266,23 @@ export class ThemeManager {
                     name: 'Variables',
                     scope: ['variable', 'variable.other'],
                     settings: {
-                        foreground: '#FFFFFF'
+                        foreground: '#4A4A4A'
                     }
                 },
                 {
-                    name: 'Numbers',
-                    scope: ['constant.numeric'],
+                    name: 'Types',
+                    scope: ['entity.name.type', 'support.type'],
                     settings: {
-                        foreground: '#FF00FF'
+                        foreground: '#9575CD',
+                        fontStyle: 'bold'
                     }
                 }
             ]
-        }
-    ];
-
-    private constructor() {
-        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
-    }
-
-    public static getInstance(): ThemeManager {
-        if (!ThemeManager.instance) {
-            ThemeManager.instance = new ThemeManager();
-        }
-        return ThemeManager.instance;
+        });
     }
 
     public async initialize(): Promise<void> {
-        if (this.isInitialized) return;
-        this.isInitialized = true;
-
-        // Registrar comando para mudar tema (somente aqui, não no construtor)
+        // Registrar comando para mudar tema
         this.disposables.push(
             vscode.commands.registerCommand(
                 'tdah-dev-helper.changeTheme',
@@ -448,68 +290,50 @@ export class ThemeManager {
             )
         );
 
-        // Carregar tema atual
-        await this.loadCurrentTheme();
-    }
-
-    private async loadCurrentTheme(): Promise<void> {
-        const themeId = this.config.get<string>('theme');
-        if (themeId) {
-            const theme = this.themes.find(t => t.id === themeId);
-            if (theme) {
-                await this.applyTheme(theme);
-            }
+        // Carregar tema salvo
+        const config = vscode.workspace.getConfiguration('tdahDevHelper');
+        const savedTheme = config.get<string>('theme');
+        
+        if (savedTheme) {
+            await this.applyTheme(savedTheme);
         }
     }
 
-    public async showThemePicker(): Promise<void> {
-        const selected = await vscode.window.showQuickPick(
-            this.themes.map(theme => ({
-                label: theme.name,
-                description: theme.description,
-                theme
-            })),
-            {
-                placeHolder: 'Selecione um tema otimizado para TDAH'
-            }
-        );
+    private async showThemePicker(): Promise<void> {
+        const themes = this.themes.map(theme => ({
+            label: theme.name,
+            description: `Tema ${theme.type === 'light' ? 'claro' : 'escuro'} otimizado para TDAH`,
+            theme
+        }));
+
+        const selected = await vscode.window.showQuickPick(themes, {
+            placeHolder: 'Selecione um tema otimizado para TDAH'
+        });
 
         if (selected) {
-            await this.applyTheme(selected.theme);
+            await this.applyTheme(selected.theme.name);
         }
     }
 
-    private async applyTheme(theme: ThemeConfig): Promise<void> {
-        try {
-            // Atualizar configuração
-            await this.config.update('theme', theme.id, true);
+    private async applyTheme(themeName: string): Promise<void> {
+        const theme = this.themes.find(t => t.name === themeName);
+        if (!theme) return;
 
-            // Aplicar tema
-            await vscode.workspace.getConfiguration().update(
-                'workbench.colorTheme',
-                theme.id,
-                true
-            );
+        // Salvar preferência
+        const config = vscode.workspace.getConfiguration('tdahDevHelper');
+        await config.update('theme', themeName, true);
 
-            // Salvar tema atual
-            this.currentTheme = theme;
+        // Aplicar tema
+        await vscode.workspace.getConfiguration().update(
+            'workbench.colorTheme',
+            themeName,
+            true
+        );
 
-            // Notificar usuário
-            vscode.window.showInformationMessage(
-                `Tema "${theme.name}" aplicado com sucesso!`
-            );
-        } catch (error) {
-            console.error('Erro ao aplicar tema:', error);
-            vscode.window.showErrorMessage('Erro ao aplicar tema');
-        }
-    }
-
-    public getCurrentTheme(): ThemeConfig | null {
-        return this.currentTheme;
-    }
-
-    public getAvailableThemes(): ThemeConfig[] {
-        return [...this.themes];
+        // Mostrar mensagem de sucesso
+        vscode.window.showInformationMessage(
+            `Tema "${themeName}" aplicado com sucesso!`
+        );
     }
 
     public dispose(): void {

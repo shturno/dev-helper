@@ -29,7 +29,7 @@ export class GamificationManager {
     private disposables: vscode.Disposable[] = [];
     private achievements: Achievement[] = [];
     private levelUpRewards: LevelUpReward[] = [];
-    private currentUserData: UserData;
+    private currentUserData: UserData | null = null;
 
     private constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(
@@ -145,7 +145,7 @@ export class GamificationManager {
     }
 
     private updateStatusBar(): void {
-        const { level, xp_points, xp_for_next_level, title } = this.currentUserData;
+        const { level, xp_points, xp_for_next_level, title } = this.currentUserData!;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
 
         this.statusBarItem.text = `$(account) ${title} (Nível ${level}) - ${progress}%`;
@@ -161,7 +161,6 @@ export class GamificationManager {
 
     private async checkAchievements(): Promise<void> {
         // Verificar conquistas localmente
-        const now = Date.now();
         const hour = new Date().getHours();
 
         // Verificar conquistas baseadas em tempo
@@ -184,33 +183,33 @@ export class GamificationManager {
     }
 
     public async onTaskCompleted(xpEarned: number): Promise<void> {
-        const oldLevel = this.currentUserData.level;
+        const oldLevel = this.currentUserData!.level;
         this.addXP(xpEarned);
 
-        if (this.currentUserData.level > oldLevel) {
+        if (this.currentUserData!.level > oldLevel) {
             await this.handleLevelUp();
         }
 
         // Mostrar notificação de XP
         vscode.window.showInformationMessage(
-            `+${xpEarned} XP! Total: ${this.currentUserData.xp_points}/${this.currentUserData.xp_for_next_level}`
+            `+${xpEarned} XP! Total: ${this.currentUserData!.xp_points}/${this.currentUserData!.xp_for_next_level}`
         );
 
         this.updateStatusBar();
     }
 
     private addXP(amount: number): void {
-        this.currentUserData.xp_points += amount;
+        this.currentUserData!.xp_points += amount;
 
         // Calcular novo nível
-        const newLevel = Math.floor(this.currentUserData.xp_points / 100) + 1;
-        if (newLevel > this.currentUserData.level) {
-            this.currentUserData.level = newLevel;
-            this.currentUserData.title = this.getLevelTitle(newLevel);
+        const newLevel = Math.floor(this.currentUserData!.xp_points / 100) + 1;
+        if (newLevel > this.currentUserData!.level) {
+            this.currentUserData!.level = newLevel;
+            this.currentUserData!.title = this.getLevelTitle(newLevel);
         }
 
         // Atualizar XP necessário para próximo nível
-        this.currentUserData.xp_for_next_level = newLevel * 100;
+        this.currentUserData!.xp_for_next_level = newLevel * 100;
     }
 
     private getLevelTitle(level: number): string {
@@ -223,13 +222,13 @@ export class GamificationManager {
 
     private async handleLevelUp(): Promise<void> {
         const levelUpReward = this.levelUpRewards.find(
-            reward => reward.level === this.currentUserData.level
+            reward => reward.level === this.currentUserData!.level
         );
 
         if (levelUpReward) {
             // Mostrar notificação de level up
             vscode.window.showInformationMessage(
-                `🎉 Parabéns! Você alcançou o nível ${this.currentUserData.level}!`,
+                `🎉 Parabéns! Você alcançou o nível ${this.currentUserData!.level}!`,
                 'Ver Recompensas'
             ).then(selection => {
                 if (selection === 'Ver Recompensas') {
@@ -333,7 +332,7 @@ export class GamificationManager {
     }
 
     private getProfileContent(): string {
-        const { level, xp_points, xp_for_next_level, title } = this.currentUserData;
+        const { level, xp_points, xp_for_next_level, title } = this.currentUserData!;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
 
         return `
