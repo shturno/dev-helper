@@ -40,12 +40,16 @@ export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
  * @returns The sanitized string
  */
 export function sanitizeHtml(input: string): string {
-    // Remove tags perigosas e retorna texto seguro
-    return sanitizeHtmlLib(input, {
-        allowedTags: [],
-        allowedAttributes: {},
-        disallowedTagsMode: 'discard'
-    });
+    // Primeiro, remover scripts para segurança
+    const withoutScripts = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Escapar caracteres HTML
+    return withoutScripts
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 /**
