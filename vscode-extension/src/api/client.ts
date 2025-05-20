@@ -1,4 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import * as vscode from 'vscode';
+import { Task as ApiTask, Subtask as ApiSubtask } from './types';
+import { TaskStatus } from '../tasks/tracker';
 
 export interface Task {
     id: number;
@@ -48,9 +51,11 @@ export interface ApiConfig {
 export class ApiClient {
     private client: AxiosInstance;
     private baseUrl: string;
+    private apiKey: string | undefined;
 
     constructor(baseUrl?: string) {
-        this.baseUrl = baseUrl || 'http://localhost:3000';
+        this.baseUrl = baseUrl || 'https://api.tdah-dev-helper.com/v1';
+        this.apiKey = process.env.TDAH_API_KEY;
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: 5000,
@@ -113,8 +118,28 @@ export class ApiClient {
         return this.put('/tasks/active', { taskId });
     }
 
-    public async createTask(task: any): Promise<any> {
-        return this.post('/tasks', task);
+    public async createTask(task: Omit<ApiTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiTask> {
+        const response = await fetch(`${this.baseUrl}/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                ...task,
+                status: TaskStatus.PENDING
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro ao criar tarefa na API');
+        }
+
+        const data = await response.json();
+        if (!this.isValidTask(data)) {
+            throw new Error('Resposta inválida da API');
+        }
+
+        return data;
     }
 
     public async updateTask(id: string, task: any): Promise<any> {
@@ -177,5 +202,60 @@ export class ApiClient {
             type: 'focus_session_end',
             data
         });
+    }
+
+    async updateTaskStatus(taskId: number, status: TaskStatus): Promise<ApiTask> {
+        const response = await fetch(`${this.baseUrl}/tasks/${taskId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) {
+            throw new Error('Erro ao atualizar status da tarefa na API');
+        }
+
+        const data = await response.json();
+        if (!this.isValidTask(data)) {
+            throw new Error('Resposta inválida da API');
+        }
+
+        return data;
+    }
+
+    private isValidTask(data: unknown): data is ApiTask {
+        if (!data || typeof data !== 'object') return false;
+
+        const task = data as ApiTask;
+        return (
+            typeof task.id === 'number' &&
+            typeof task.title === 'string' &&
+            (!task.description || typeof task.description === 'string') &&
+            Object.values(TaskStatus).includes(task.status) &&
+            Array.isArray(task.subtasks) &&
+            task.subtasks.every(this.isValidSubtask) &&
+            task.createdAt instanceof Date &&
+            task.updatedAt instanceof Date
+        );
+    }
+
+    private isValidSubtask(data: unknown): data is ApiSubtask {
+        if (!data || typeof data !== 'object') return false;
+
+        const subtask = data as ApiSubtask;
+        return (
+            typeof subtask.id === 'number' &&
+            typeof subtask.taskId === 'number' &&
+            typeof subtask.title === 'string' &&
+            typeof subtask.estimatedMinutes === 'number' &&
+            typeof subtask.completed === 'boolean'
+        );
+    }
+
+    public dispose(): void {
+        // Limpar recursos se necessário
+        this.apiKey = undefined;
     }
 } 

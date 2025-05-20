@@ -24,7 +24,7 @@ export async function activate(context: vscode.ExtensionContext) {
         hyperfocusManager = HyperfocusManager.getInstance();
         notificationBlocker = new NotificationBlocker();
         themeManager = ThemeManager.getInstance();
-        taskTracker = new TaskTracker();
+        taskTracker = new TaskTracker(context);
         gamificationManager = GamificationManager.getInstance();
 
         // Inicializar componentes opcionais baseados na configuração
@@ -93,149 +93,53 @@ export async function activate(context: vscode.ExtensionContext) {
                 }
             }),
 
-            // Comandos de Tarefas (agora sempre disponíveis)
-            vscode.commands.registerCommand('tdah-dev-helper.showDashboard', () => {
-                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.showDashboard' chamado.");
-                taskTracker?.showDashboard();
-            }),
-            vscode.commands.registerCommand('tdah-dev-helper.createTask', async () => {
-                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.createTask' chamado.");
+            // Comandos de Tarefas
+            vscode.commands.registerCommand('tdah-dev-helper.showDashboard', async () => {
                 try {
-                    if (!taskTracker) {
-                        throw new Error('TaskTracker não inicializado');
-                    }
-
-                    if (hyperfocusManager?.isActive) {
-                        const shouldStopFocus = await vscode.window.showWarningMessage(
-                            'Você está em modo hiperfoco. Deseja desativá-lo para criar uma nova tarefa?',
-                            'Sim', 'Não'
-                        );
-                        
-                        if (shouldStopFocus === 'Sim') {
-                            await hyperfocusManager.deactivateHyperfocus();
-                            notificationBlocker?.stopBlocking();
-                        } else {
-                            return;
-                        }
-                    }
-
-                    await taskTracker.createTask();
+                    await taskTracker?.showTaskDetails();
                 } catch (error) {
-                    console.error('Erro ao criar tarefa:', error);
-                    vscode.window.showErrorMessage('Erro ao criar tarefa');
+                    console.error('Erro ao mostrar dashboard:', error);
+                    vscode.window.showErrorMessage('Erro ao mostrar dashboard. Por favor, tente novamente.');
                 }
             }),
-            vscode.commands.registerCommand('tdah-dev-helper.selectTask', async () => {
-                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.selectTask' chamado.");
+            vscode.commands.registerCommand('tdah-dev-helper.createTask', async () => {
                 try {
-                    if (!taskTracker) {
-                        throw new Error('TaskTracker não inicializado');
-                    }
-
-                    if (hyperfocusManager?.isActive) {
-                        const shouldStopFocus = await vscode.window.showWarningMessage(
-                            'Você está em modo hiperfoco. Deseja desativá-lo para selecionar uma nova tarefa?',
-                            'Sim', 'Não'
-                        );
-                        
-                        if (shouldStopFocus === 'Sim') {
-                            await hyperfocusManager.deactivateHyperfocus();
-                            notificationBlocker?.stopBlocking();
-                        } else {
-                            return;
-                        }
-                    }
-
-                    await taskTracker.selectTask();
+                    await taskTracker?.createTask();
                 } catch (error) {
-                    console.error('Erro ao selecionar tarefa:', error);
-                    vscode.window.showErrorMessage('Erro ao selecionar tarefa');
+                    console.error('Erro ao criar tarefa:', error);
+                    vscode.window.showErrorMessage('Erro ao criar tarefa. Por favor, tente novamente.');
                 }
             }),
             vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', async () => {
-                console.log("TDAH Dev Helper: Comando 'tdah-dev-helper.decomposeTask' chamado.");
                 try {
-                    if (!taskTracker) {
-                        throw new Error('TaskTracker não inicializado');
-                    }
-
-                    if (hyperfocusManager?.isActive) {
-                        const shouldStopFocus = await vscode.window.showWarningMessage(
-                            'Você está em modo hiperfoco. Deseja desativá-lo para decompor a tarefa?',
-                            'Sim', 'Não'
-                        );
-                        
-                        if (shouldStopFocus === 'Sim') {
-                            await hyperfocusManager.deactivateHyperfocus();
-                            notificationBlocker?.stopBlocking();
-                        } else {
-                            return;
-                        }
-                    }
-
-                    await taskTracker.decomposeCurrentTask();
+                    await taskTracker?.decomposeCurrentTask();
                 } catch (error) {
                     console.error('Erro ao decompor tarefa:', error);
-                    vscode.window.showErrorMessage('Erro ao decompor tarefa');
+                    vscode.window.showErrorMessage('Erro ao decompor tarefa. Por favor, tente novamente.');
                 }
             }),
 
-            // Comando para mostrar notificações bloqueadas (registrado apenas se notificationBlocker estiver ativo)
-            ...(notificationBlocker ? [
-                vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', () => {
-                    notificationBlocker?.showBlockedNotifications();
-                })
-            ] : []),
-
-            // Comando para mostrar perfil (agora sempre disponível)
-            vscode.commands.registerCommand('tdah-dev-helper.showProfile', () => {
-                gamificationManager?.showProfile();
+            // Comando para mostrar notificações bloqueadas (registrado apenas se notificationBlocker está inicializado)
+            vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', async () => {
+                if (notificationBlocker) {
+                    notificationBlocker.showBlockedNotifications();
+                }
             })
         ];
 
         // Adicionar disposables ao contexto
         context.subscriptions.push(...disposables);
-
-        // Inicializar componentes
-        await Promise.all([
-            contextDetector?.initialize(),
-            hyperfocusManager.initialize(),
-            taskTracker.initialize(),
-            gamificationManager.initialize(),
-            themeManager.initialize()
-        ].filter(Boolean));
-
-        // Mostrar mensagem de boas-vindas
-        vscode.window.showInformationMessage(
-            'TDAH Dev Helper ativado! Use Ctrl+Shift+P e digite "TDAH" para ver os comandos disponíveis.'
-        );
-
     } catch (error) {
-        console.error('Erro ao inicializar TDAH Dev Helper:', error);
-        vscode.window.showErrorMessage(
-            'Erro ao inicializar TDAH Dev Helper. Verifique o console para mais detalhes.'
-        );
+        console.error('Erro ao ativar a extensão:', error);
+        vscode.window.showErrorMessage('Erro ao ativar a extensão. Por favor, tente novamente mais tarde.');
     }
 }
 
-export async function deactivate() {
-    try {
-        // Desativar modo hiperfoco se estiver ativo
-        if (hyperfocusManager?.isActive) {
-            await hyperfocusManager.deactivateHyperfocus();
-            notificationBlocker?.stopBlocking();
-        }
-
-        // Limpar recursos
-        contextDetector?.dispose();
-        hyperfocusManager?.dispose();
-        notificationBlocker?.dispose();
-        taskTracker?.dispose();
-        gamificationManager?.dispose();
-        themeManager?.dispose();
-
-        console.log('TDAH Dev Helper foi desativado.');
-    } catch (error) {
-        console.error('Erro ao desativar TDAH Dev Helper:', error);
+export function deactivate() {
+    if (taskTracker) {
+        taskTracker.dispose();
     }
-} 
+    if (apiClient) {
+        apiClient.dispose();
+    }
+}

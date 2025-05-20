@@ -1,10 +1,14 @@
+import { TaskStatus } from '../tasks/tracker';
+
 export interface Task {
     id: number;
     title: string;
-    description: string;
-    status: 'pending' | 'in_progress' | 'completed';
+    description?: string;
+    status: TaskStatus;
     xpReward: number;
     subtasks: Subtask[];
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface Subtask {
