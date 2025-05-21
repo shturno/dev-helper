@@ -301,6 +301,7 @@ export class TaskTracker {
             }
 
             // Loop para adicionar múltiplas subtarefas
+            // eslint-disable-next-line no-constant-condition
             while (true) {
                 // Verificar limite de subtarefas
                 if (task.subtasks.length >= MAX_SUBTASKS_PER_TASK) {

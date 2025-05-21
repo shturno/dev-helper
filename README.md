@@ -1,35 +1,35 @@
-# TDAH Dev Helper
+# Dev Helper
 
-Um sistema completo projetado para ajudar desenvolvedores com TDAH a aumentar sua produtividade e foco, combinando microtarefas contextuais, modo hiperfoco inteligente e gamificação com recompensas tangíveis.
+A complete system designed to help developers increase productivity and focus, combining contextual microtasks, smart hyperfocus mode, and gamification with tangible rewards.
 
-## Componentes do Sistema
+## System Components
 
-- **Backend API (Laravel/PHP)**: Gerencia dados, integrações e lógica de negócios
-- **Frontend Web (React/Next.js)**: Interface para visualização e configuração
-- **Extensão VS Code (TypeScript)**: Integração direta com o ambiente de desenvolvimento
-- **Banco de Dados (MySQL)**: Armazenamento persistente de dados
+- **Backend API (Laravel/PHP)**: Manages data, integrations, and business logic
+- **Frontend Web (React/Next.js)**: Interface for visualization and configuration
+- **VS Code Extension (TypeScript)**: Direct integration with the development environment
+- **Database (MySQL)**: Persistent data storage
 
-## Requisitos do Sistema
+## System Requirements
 
 - PHP 8.3+
 - Node.js 18+
 - MySQL 8.0+
 - Composer
 - npm/yarn
-- VS Code (para desenvolvimento da extensão)
+- VS Code (for extension development)
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
-tdah-dev-helper/
-├── backend/                 # API Laravel
-├── frontend/               # Aplicação Next.js
-├── vscode-extension/       # Extensão VS Code
-├── docs/                   # Documentação
-└── docker/                 # Configurações Docker
+dev-helper/
+├── backend/                 # Laravel API
+├── frontend/                # Next.js Application
+├── vscode-extension/        # VS Code Extension
+├── docs/                    # Documentation
+└── docker/                  # Docker Configurations
 ```
 
-## Configuração do Ambiente de Desenvolvimento
+## Development Environment Setup
 
 ### 1. Backend (Laravel)
 
@@ -51,7 +51,7 @@ cp .env.example .env
 npm run dev
 ```
 
-### 3. Extensão VS Code
+### 3. VS Code Extension
 
 ```bash
 cd vscode-extension
@@ -59,45 +59,45 @@ npm install
 npm run compile
 ```
 
-### 4. Banco de Dados
+### 4. Database
 
 ```bash
-# Usando Docker
+# Using Docker
 docker-compose up -d mysql
 
-# Ou instalando localmente
+# Or installing locally
 mysql -u root -p
-CREATE DATABASE tdah_dev_helper;
+CREATE DATABASE dev_helper;
 ```
 
-## Funcionalidades Principais
+## Main Features
 
-- **Sistema de Microtarefas**: Quebra tickets do Jira em passos de 15 minutos
-- **Modo Hiperfoco**: Ativação automática baseada em contexto
-- **Gamificação**: Sistema de XP, níveis e recompensas tangíveis
-- **Priorização Inteligente**: Análise de Git, Jira e horários produtivos
+- **Microtasks System**: Breaks down Jira tickets into 15-minute steps
+- **Hyperfocus Mode**: Automatic activation based on context
+- **Gamification**: XP system, levels, and tangible rewards
+- **Smart Prioritization**: Analysis of Git, Jira, and productive hours
 
-## Documentação
+## Documentation
 
-A documentação detalhada está disponível na pasta `docs/`:
+Detailed documentation is available in the `docs/` folder:
 
-- [Análise de Requisitos](docs/analise_requisitos.md)
-- [Arquitetura do Sistema](docs/arquitetura_sistema.md)
-- [Banco de Dados](docs/modelagem_banco_dados.md)
-- [API REST](docs/endpoints_api.md)
-- [Extensão VS Code](docs/extensao_vscode.md)
-- [Gamificação e Recompensas](docs/gamificacao_recompensas.md)
-- [Priorização de Tasks](docs/priorizacao_tasks.md)
-- [Validação de Critérios](docs/validacao_criterios.md)
+- [Requirements Analysis](docs/analise_requisitos.md)
+- [System Architecture](docs/arquitetura_sistema.md)
+- [Database Modeling](docs/modelagem_banco_dados.md)
+- [REST API](docs/endpoints_api.md)
+- [VS Code Extension](docs/extensao_vscode.md)
+- [Gamification and Rewards](docs/gamificacao_recompensas.md)
+- [Task Prioritization](docs/priorizacao_tasks.md)
+- [Criteria Validation](docs/validacao_criterios.md)
 
-## Contribuição
+## Contributing
 
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova feature'`)
-4. Push para a branch (`git push origin feature/nova-feature`)
-5. Abra um Pull Request
+1. Fork the repository
+2. Create a branch for your feature (`git checkout -b feature/new-feature`)
+3. Commit your changes (`git commit -m 'Add new feature'`)
+4. Push to the branch (`git push origin feature/new-feature`)
+5. Open a Pull Request
 
-## Licença
+## License
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
