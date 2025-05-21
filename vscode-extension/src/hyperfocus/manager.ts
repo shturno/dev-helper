@@ -19,6 +19,13 @@ export class HyperfocusManager {
         minimapEnabled: boolean;
         fontSize: number;
     } | null = null;
+    private stats = {
+        todayMinutes: 0,
+        streak: 0,
+        totalMinutes: 0,
+        sessions: 0,
+        lastSessionDate: null as Date | null
+    };
 
     private constructor() {
         this.config = vscode.workspace.getConfiguration('tdahDevHelper');
@@ -27,6 +34,7 @@ export class HyperfocusManager {
             100
         );
         this.statusBarItem.command = 'tdah-dev-helper.stopFocus';
+        this.loadStats();
     }
 
     public static getInstance(): HyperfocusManager {
@@ -51,6 +59,57 @@ export class HyperfocusManager {
     public dispose(): void {
         this.disposables.forEach(d => d.dispose());
         this.statusBarItem.dispose();
+    }
+
+    private loadStats(): void {
+        try {
+            const savedStats = this.config.get('hyperfocusStats', {
+                todayMinutes: 0,
+                streak: 0,
+                totalMinutes: 0,
+                sessions: 0,
+                lastSessionDate: null
+            });
+
+            this.stats = {
+                ...savedStats,
+                lastSessionDate: savedStats.lastSessionDate ? new Date(savedStats.lastSessionDate) : null
+            };
+
+            // Reset today's minutes if it's a new day
+            if (this.stats.lastSessionDate) {
+                const today = new Date();
+                const lastSession = new Date(this.stats.lastSessionDate);
+                if (today.toDateString() !== lastSession.toDateString()) {
+                    this.stats.todayMinutes = 0;
+                    // Update streak
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    if (yesterday.toDateString() === lastSession.toDateString()) {
+                        this.stats.streak++;
+                    } else {
+                        this.stats.streak = 0;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao carregar estatísticas:', error);
+        }
+    }
+
+    private async saveStats(): Promise<void> {
+        try {
+            await this.config.update('hyperfocusStats', {
+                ...this.stats,
+                lastSessionDate: this.stats.lastSessionDate?.toISOString()
+            }, true);
+        } catch (error) {
+            console.error('Erro ao salvar estatísticas:', error);
+        }
+    }
+
+    public getStats() {
+        return { ...this.stats };
     }
 
     public async activateHyperfocus(context: HyperfocusContext): Promise<void> {
@@ -91,6 +150,16 @@ export class HyperfocusManager {
         }
 
         try {
+            // Calcular duração da sessão
+            const duration = this.getSessionDurationInMinutes();
+            if (duration > 0) {
+                this.stats.todayMinutes += duration;
+                this.stats.totalMinutes += duration;
+                this.stats.sessions++;
+                this.stats.lastSessionDate = new Date();
+                await this.saveStats();
+            }
+
             // Desativar modo hiperfoco
             this.isActive = false;
             this.startTime = null;
@@ -100,9 +169,8 @@ export class HyperfocusManager {
             await this.restoreNormalSettings();
 
             // Mostrar notificação com duração da sessão
-            const duration = this.getSessionDuration();
             vscode.window.showInformationMessage(
-                `Modo Hiperfoco desativado. Duração: ${duration}`
+                `Modo Hiperfoco desativado. Duração: ${this.formatDuration(duration)}`
             );
 
         } catch (error) {
@@ -205,18 +273,19 @@ export class HyperfocusManager {
         }
     }
 
-    private getSessionDuration(): string {
+    private getSessionDurationInMinutes(): number {
         if (!this.startTime) {
-            return '0 minutos';
+            return 0;
         }
+        return Math.floor((Date.now() - this.startTime) / 1000 / 60);
+    }
 
-        const duration = Math.floor((Date.now() - this.startTime) / 1000 / 60);
-        const hours = Math.floor(duration / 60);
-        const minutes = duration % 60;
-
+    private formatDuration(minutes: number): string {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
         if (hours > 0) {
-            return `${hours}h ${minutes}m`;
+            return `${hours}h ${mins}m`;
         }
-        return `${minutes} minutos`;
+        return `${mins} minutos`;
     }
 } 

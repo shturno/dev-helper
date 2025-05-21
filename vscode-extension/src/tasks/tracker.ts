@@ -17,13 +17,14 @@ export enum TaskStatus {
 }
 
 export class TaskTracker {
+    private static instance: TaskTracker;
     private currentTask: Task | undefined;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
     private webviewPanel: vscode.WebviewPanel | null = null;
     private tasks: Task[] = [];
 
-    constructor(private context: vscode.ExtensionContext) {
+    private constructor(private context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
@@ -33,6 +34,16 @@ export class TaskTracker {
         // Carregar tarefas salvas
         this.loadTasks();
         this.initialize();
+    }
+
+    public static getInstance(context?: vscode.ExtensionContext): TaskTracker {
+        if (!TaskTracker.instance) {
+            if (!context) {
+                throw new Error('Context is required to initialize TaskTracker');
+            }
+            TaskTracker.instance = new TaskTracker(context);
+        }
+        return TaskTracker.instance;
     }
 
     private async loadTasks(): Promise<void> {
@@ -289,64 +300,79 @@ export class TaskTracker {
                 throw new Error('Tarefa não encontrada');
             }
 
-            // Verificar limite de subtarefas
-            if (task.subtasks.length >= MAX_SUBTASKS_PER_TASK) {
-                vscode.window.showWarningMessage(`Limite máximo de ${MAX_SUBTASKS_PER_TASK} subtarefas atingido`);
-                return;
+            // Loop para adicionar múltiplas subtarefas
+            while (true) {
+                // Verificar limite de subtarefas
+                if (task.subtasks.length >= MAX_SUBTASKS_PER_TASK) {
+                    vscode.window.showWarningMessage(`Limite máximo de ${MAX_SUBTASKS_PER_TASK} subtarefas atingido`);
+                    break;
+                }
+
+                // Perguntar se deseja adicionar mais uma subtarefa
+                if (task.subtasks.length > 0) {
+                    const shouldContinue = await vscode.window.showQuickPick(['Sim', 'Não'], {
+                        placeHolder: 'Deseja adicionar mais uma subtarefa?'
+                    });
+                    if (shouldContinue !== 'Sim') {
+                        break;
+                    }
+                }
+
+                // Solicitar título da subtarefa
+                const title = await vscode.window.showInputBox({
+                    prompt: 'Título da subtarefa',
+                    placeHolder: 'Digite o título da subtarefa',
+                    validateInput: (value) => {
+                        if (!value) return 'O título é obrigatório';
+                        if (!isValidInput(value)) return 'O título contém caracteres inválidos';
+                        if (value.length > MAX_TITLE_LENGTH) return `O título deve ter no máximo ${MAX_TITLE_LENGTH} caracteres`;
+                        return null;
+                    }
+                });
+
+                if (!title) break;
+
+                // Solicitar tempo estimado
+                const estimatedMinutesStr = await vscode.window.showInputBox({
+                    prompt: 'Tempo estimado (em minutos)',
+                    placeHolder: 'Digite o tempo estimado em minutos',
+                    validateInput: (value) => {
+                        const minutes = parseInt(value);
+                        if (isNaN(minutes)) return 'Digite um número válido';
+                        if (minutes < 0) return 'O tempo deve ser positivo';
+                        if (minutes > MAX_ESTIMATED_MINUTES) return `O tempo máximo é ${MAX_ESTIMATED_MINUTES} minutos`;
+                        return null;
+                    }
+                });
+
+                if (!estimatedMinutesStr) break;
+
+                const estimatedMinutes = parseInt(estimatedMinutesStr);
+
+                // Criar nova subtarefa
+                const newSubtask: Subtask = {
+                    id: Date.now(),
+                    taskId: task.id,
+                    title: sanitizeHtml(title),
+                    estimatedMinutes,
+                    completed: false
+                };
+
+                // Validar subtarefa antes de adicionar
+                const validation = this.validateTask({ ...task, subtasks: [...task.subtasks, newSubtask] });
+                if (!validation.isValid) {
+                    vscode.window.showErrorMessage(`Erro ao adicionar subtarefa: ${validation.errors.join(', ')}`);
+                    continue;
+                }
+
+                task.subtasks.push(newSubtask);
+                task.updatedAt = new Date();
+                await this.saveTasks();
+
+                vscode.window.showInformationMessage('Subtarefa adicionada com sucesso!');
             }
 
-            // Solicitar título da subtarefa
-            const title = await vscode.window.showInputBox({
-                prompt: 'Título da subtarefa',
-                placeHolder: 'Digite o título da subtarefa',
-                validateInput: (value) => {
-                    if (!value) return 'O título é obrigatório';
-                    if (!isValidInput(value)) return 'O título contém caracteres inválidos';
-                    if (value.length > MAX_TITLE_LENGTH) return `O título deve ter no máximo ${MAX_TITLE_LENGTH} caracteres`;
-                    return null;
-                }
-            });
-
-            if (!title) return;
-
-            // Solicitar tempo estimado
-            const estimatedMinutesStr = await vscode.window.showInputBox({
-                prompt: 'Tempo estimado (em minutos)',
-                placeHolder: 'Digite o tempo estimado em minutos',
-                validateInput: (value) => {
-                    const minutes = parseInt(value);
-                    if (isNaN(minutes)) return 'Digite um número válido';
-                    if (minutes < 0) return 'O tempo deve ser positivo';
-                    if (minutes > MAX_ESTIMATED_MINUTES) return `O tempo máximo é ${MAX_ESTIMATED_MINUTES} minutos`;
-                    return null;
-                }
-            });
-
-            if (!estimatedMinutesStr) return;
-
-            const estimatedMinutes = parseInt(estimatedMinutesStr);
-
-            // Criar nova subtarefa
-            const newSubtask: Subtask = {
-                id: Date.now(),
-                taskId: task.id,
-                title: sanitizeHtml(title),
-                estimatedMinutes,
-                completed: false
-            };
-
-            // Validar subtarefa antes de adicionar
-            const validation = this.validateTask({ ...task, subtasks: [...task.subtasks, newSubtask] });
-            if (!validation.isValid) {
-                vscode.window.showErrorMessage(`Erro ao adicionar subtarefa: ${validation.errors.join(', ')}`);
-                return;
-            }
-
-            task.subtasks.push(newSubtask);
-            task.updatedAt = new Date();
-            await this.saveTasks();
-
-            vscode.window.showInformationMessage('Subtarefa adicionada com sucesso!');
+            // Atualizar dashboard após adicionar todas as subtarefas
             this.updateDashboard();
         } catch (error) {
             console.error('Erro ao decompor tarefa:', error);
@@ -580,5 +606,9 @@ export class TaskTracker {
                 tasks: sanitizeForWebview(this.tasks)
             });
         }
+    }
+
+    public getTasks(): Task[] {
+        return [...this.tasks];
     }
 } 

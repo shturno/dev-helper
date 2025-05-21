@@ -3,21 +3,69 @@ import { ApiClient } from './api/client';
 import { TaskTracker } from './tasks/tracker';
 import { HyperfocusManager } from './hyperfocus/manager';
 import { NotificationBlocker } from './notifications/blocker';
+import { DashboardView } from './views/dashboard';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
 let hyperfocusManager: HyperfocusManager | null = null;
 let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
+let dashboardView: DashboardView | null = null;
+
+// IDs dos comandos (sem timestamp para manter consistência)
+const COMMANDS = {
+    startFocus: 'tdah-dev-helper.startFocus',
+    stopFocus: 'tdah-dev-helper.stopFocus',
+    showDashboard: 'tdah-dev-helper.showDashboard',
+    createTask: 'tdah-dev-helper.createTask',
+    decomposeTask: 'tdah-dev-helper.decomposeTask',
+    showBlockedNotifications: 'tdah-dev-helper.showBlockedNotifications'
+};
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    console.warn('TDAH Dev Helper está ativo!');
+    console.warn('TDAH Dev Helper: Iniciando ativação...');
 
     try {
-        // Inicializar componentes principais
+        // Limpar o contexto anterior
+        context.subscriptions.forEach(d => d.dispose());
+        context.subscriptions.length = 0;
+
+        console.warn('TDAH Dev Helper: Inicializando HyperfocusManager...');
         hyperfocusManager = HyperfocusManager.getInstance();
+        console.warn('TDAH Dev Helper: HyperfocusManager inicializado');
+
+        console.warn('TDAH Dev Helper: Inicializando NotificationBlocker...');
         notificationBlocker = new NotificationBlocker();
-        taskTracker = new TaskTracker(context);
+        console.warn('TDAH Dev Helper: NotificationBlocker inicializado');
+
+        console.warn('TDAH Dev Helper: Inicializando TaskTracker...');
+        taskTracker = TaskTracker.getInstance(context);
+        console.warn('TDAH Dev Helper: TaskTracker inicializado');
+
+        // Inicializar o DashboardView
+        if (hyperfocusManager && taskTracker) {
+            console.warn('TDAH Dev Helper: Inicializando DashboardView...');
+            dashboardView = DashboardView.getInstance(context);
+            console.warn('TDAH Dev Helper: DashboardView inicializado');
+        }
+
+        // Registrar o provider da view do dashboard
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(
+                'tdah-dev-helper.dashboard',
+                {
+                    resolveWebviewView: (webviewView) => {
+                        if (dashboardView) {
+                            dashboardView.resolveWebviewView(
+                                webviewView,
+                                { state: {} },
+                                new vscode.CancellationTokenSource().token
+                            );
+                        }
+                    }
+                }
+            )
+        );
 
         // Inicializar componentes opcionais baseados na configuração
         const config = vscode.workspace.getConfiguration('tdahDevHelper');
@@ -27,6 +75,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (debug) {
             console.warn('TDAH Dev Helper: Modo debug ativado');
             console.warn('TDAH Dev Helper: API URL:', apiUrl || 'não configurada');
+            console.warn('TDAH Dev Helper: Diretório de extensão:', context.extensionPath);
+            console.warn('TDAH Dev Helper: Ambiente de desenvolvimento:', process.env.NODE_ENV);
         }
 
         if (apiUrl) {
@@ -42,22 +92,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         // Registrar comandos
         const disposables = [
-            // Comandos de Hiperfoco
-            vscode.commands.registerCommand('tdah-dev-helper.startFocus', async () => {
+            vscode.commands.registerCommand(COMMANDS.startFocus, async () => {
                 try {
                     if (!hyperfocusManager) {
                         throw new Error('HyperfocusManager não inicializado');
                     }
-
                     await hyperfocusManager.activateHyperfocus({
                         reason: 'manual',
                         complexity: 0
                     });
-
                     if (notificationBlocker) {
                         notificationBlocker.startBlocking();
                     }
-
+                    dashboardView?.update();
                     vscode.window.showInformationMessage('Modo hiperfoco ativado!');
                 } catch (error) {
                     console.error('Erro ao iniciar modo hiperfoco:', error);
@@ -65,18 +112,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
             }),
 
-            vscode.commands.registerCommand('tdah-dev-helper.stopFocus', async () => {
+            vscode.commands.registerCommand(COMMANDS.stopFocus, async () => {
                 try {
                     if (!hyperfocusManager) {
                         throw new Error('HyperfocusManager não inicializado');
                     }
-
                     await hyperfocusManager.deactivateHyperfocus();
-                    
                     if (notificationBlocker) {
                         notificationBlocker.stopBlocking();
                     }
-
+                    dashboardView?.update();
                     vscode.window.showInformationMessage('Modo hiperfoco desativado!');
                 } catch (error) {
                     console.error('Erro ao parar modo hiperfoco:', error);
@@ -84,53 +129,70 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
             }),
 
-            // Comandos de Tarefas
-            vscode.commands.registerCommand('tdah-dev-helper.showDashboard', async () => {
+            vscode.commands.registerCommand(COMMANDS.showDashboard, async () => {
                 try {
-                    await taskTracker?.showTaskDetails();
+                    await vscode.commands.executeCommand('tdah-dev-helper.dashboard.focus');
                 } catch (error) {
                     console.error('Erro ao mostrar dashboard:', error);
                     vscode.window.showErrorMessage('Erro ao mostrar dashboard. Por favor, tente novamente.');
                 }
             }),
-            vscode.commands.registerCommand('tdah-dev-helper.createTask', async () => {
+
+            vscode.commands.registerCommand(COMMANDS.createTask, async () => {
                 try {
                     await taskTracker?.createTask();
+                    dashboardView?.update();
                 } catch (error) {
                     console.error('Erro ao criar tarefa:', error);
                     vscode.window.showErrorMessage('Erro ao criar tarefa. Por favor, tente novamente.');
                 }
             }),
-            vscode.commands.registerCommand('tdah-dev-helper.decomposeTask', async () => {
+
+            vscode.commands.registerCommand(COMMANDS.decomposeTask, async () => {
                 try {
                     await taskTracker?.decomposeCurrentTask();
+                    dashboardView?.update();
                 } catch (error) {
                     console.error('Erro ao decompor tarefa:', error);
                     vscode.window.showErrorMessage('Erro ao decompor tarefa. Por favor, tente novamente.');
                 }
             }),
 
-            // Comando para mostrar notificações bloqueadas (registrado apenas se notificationBlocker está inicializado)
-            vscode.commands.registerCommand('tdah-dev-helper.showBlockedNotifications', async () => {
+            vscode.commands.registerCommand(COMMANDS.showBlockedNotifications, async () => {
                 if (notificationBlocker) {
                     notificationBlocker.showBlockedNotifications();
                 }
             })
         ];
 
-        // Adicionar disposables ao contexto
-        context.subscriptions.push(...disposables);
+        // Adicionar todos os disposables ao contexto
+        disposables.forEach(d => context.subscriptions.push(d));
+
+        // Adicionar um disposable para limpeza geral
+        context.subscriptions.push({
+            dispose: () => {
+                if (taskTracker) {
+                    taskTracker.dispose();
+                }
+                if (apiClient) {
+                    apiClient.dispose();
+                }
+                if (dashboardView) {
+                    dashboardView.dispose();
+                }
+            }
+        });
+
+        console.warn('TDAH Dev Helper: Ativação concluída com sucesso');
     } catch (error) {
-        console.error('Erro ao ativar a extensão:', error);
-        vscode.window.showErrorMessage('Erro ao ativar a extensão. Por favor, tente novamente mais tarde.');
+        console.error('TDAH Dev Helper: Erro detalhado ao ativar a extensão:', error);
+        if (error instanceof Error) {
+            console.error('TDAH Dev Helper: Stack trace:', error.stack);
+        }
+        throw error;
     }
 }
 
 export function deactivate(): void {
-    if (taskTracker) {
-        taskTracker.dispose();
-    }
-    if (apiClient) {
-        apiClient.dispose();
-    }
+    // A limpeza é feita através dos disposables no contexto
 }

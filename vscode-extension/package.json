@@ -16,8 +16,7 @@
   },
   "categories": [
     "Other",
-    "Themes",
-    "Productivity"
+    "Themes"
   ],
   "keywords": [
     "tdah",
@@ -29,65 +28,102 @@
     "accessibility"
   ],
   "activationEvents": [
-    "onCommand:tdah-dev-helper.startFocus",
-    "onCommand:tdah-dev-helper.stopFocus",
-    "onCommand:tdah-dev-helper.showDashboard",
-    "onCommand:tdah-dev-helper.selectTask",
-    "onCommand:tdah-dev-helper.decomposeTask",
-    "onCommand:tdah-dev-helper.showBlockedNotifications",
-    "onCommand:tdah-dev-helper.showProfile",
-    "onCommand:tdah-dev-helper.changeTheme",
-    "onCommand:tdah-dev-helper.createTask"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "tdah-dev-helper.startFocus",
-        "title": "TDAH: Iniciar Modo Hiperfoco",
+        "title": "TDAH Dev Helper: Iniciar Modo Hiperfoco",
         "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.stopFocus",
-        "title": "TDAH: Parar Modo Hiperfoco",
+        "title": "TDAH Dev Helper: Parar Modo Hiperfoco",
         "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.showDashboard",
-        "title": "TDAH: Mostrar Dashboard",
-        "category": "TDAH Dev Helper"
-      },
-      {
-        "command": "tdah-dev-helper.selectTask",
-        "title": "TDAH: Selecionar Tarefa",
-        "category": "TDAH Dev Helper"
-      },
-      {
-        "command": "tdah-dev-helper.decomposeTask",
-        "title": "TDAH: Decompor Tarefa",
-        "category": "TDAH Dev Helper"
-      },
-      {
-        "command": "tdah-dev-helper.showBlockedNotifications",
-        "title": "TDAH: Mostrar Notificações Bloqueadas",
-        "category": "TDAH Dev Helper"
-      },
-      {
-        "command": "tdah-dev-helper.showProfile",
-        "title": "TDAH: Mostrar Perfil",
-        "category": "TDAH Dev Helper"
-      },
-      {
-        "command": "tdah-dev-helper.changeTheme",
-        "title": "TDAH: Mudar Tema",
+        "title": "TDAH Dev Helper: Mostrar Dashboard",
         "category": "TDAH Dev Helper"
       },
       {
         "command": "tdah-dev-helper.createTask",
-        "title": "TDAH: Criar Nova Tarefa",
+        "title": "TDAH Dev Helper: Criar Tarefa",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.decomposeTask",
+        "title": "TDAH Dev Helper: Decompor Tarefa",
+        "category": "TDAH Dev Helper"
+      },
+      {
+        "command": "tdah-dev-helper.showBlockedNotifications",
+        "title": "TDAH Dev Helper: Mostrar Notificações Bloqueadas",
         "category": "TDAH Dev Helper"
       }
     ],
+    "keybindings": [
+      {
+        "command": "tdah-dev-helper.startFocus",
+        "key": "ctrl+shift+h",
+        "mac": "cmd+shift+h",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "tdah-dev-helper.stopFocus",
+        "key": "ctrl+shift+j",
+        "mac": "cmd+shift+j",
+        "when": "editorTextFocus"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tdah-dev-helper-sidebar",
+          "title": "TDAH Dev Helper",
+          "icon": "media/dashboard.svg"
+        }
+      ]
+    },
+    "views": {
+      "tdah-dev-helper-sidebar": [
+        {
+          "id": "tdah-dev-helper.dashboard",
+          "name": "Dashboard",
+          "type": "webview",
+          "initialSize": 500
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "tdah-dev-helper.dashboard",
+        "contents": "Bem-vindo ao Dashboard do TDAH Dev Helper!\n\n[Iniciar Modo Hiperfoco](command:tdah-dev-helper.startFocus)\n[Criar Nova Tarefa](command:tdah-dev-helper.createTask)\n[Decompor Tarefa](command:tdah-dev-helper.decomposeTask)\n[Mostrar Notificações Bloqueadas](command:tdah-dev-helper.showBlockedNotifications)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "tdah-dev-helper.createTask",
+          "group": "tdah-dev-helper@1",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "tdah-dev-helper.decomposeTask",
+          "group": "tdah-dev-helper@1",
+          "when": "editorTextFocus"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tdah-dev-helper.showDashboard",
+          "group": "navigation",
+          "when": "view == tdah-dev-helper.dashboard"
+        }
+      ]
+    },
     "themes": [
       {
         "label": "TDAH Focus Dark",

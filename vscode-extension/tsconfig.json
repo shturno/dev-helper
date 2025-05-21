@@ -23,16 +23,13 @@
     "strictNullChecks": true
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "src/**/*.js",
-    "src/**/*.jsx",
-    "src/__mocks__/**/*.ts"
+    "src/**/*"
   ],
   "exclude": [
+    "node_modules",
+    ".vscode-test",
     "out",
     "dist",
-    "coverage",
-    "node_modules"
+    "coverage"
   ]
 } 
