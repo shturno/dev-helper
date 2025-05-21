@@ -62,7 +62,7 @@ export class DashboardView {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Dashboard TDAH Dev Helper</title>
+                <title>Dashboard Dev Helper</title>
                 <style>
                     :root {
                         --grid-gap: 1rem;
@@ -306,7 +306,7 @@ export class DashboardView {
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>Dashboard TDAH Dev Helper</h1>
+                        <h1>Dashboard Dev Helper</h1>
                         <div class="actions">
                             <button id="startHyperfocus" class="button primary">
                                 ${this.hyperfocusManager.isActive ? 'Parar Hiperfoco' : 'Iniciar Hiperfoco'}

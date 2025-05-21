@@ -1,14 +1,14 @@
 {
-  "name": "tdah-dev-helper",
-  "displayName": "TDAH Dev Helper",
-  "description": "Extensão para ajudar desenvolvedores com TDAH a aumentar sua produtividade",
+  "name": "dev-helper",
+  "displayName": "Dev Helper",
+  "description": "Extensão para ajudar desenvolvedores a aumentar sua produtividade e manter o foco",
   "version": "0.0.1",
-  "publisher": "tdah-dev-helper",
+  "publisher": "dev-helper",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/tdah-dev-helper"
+    "url": "https://github.com/yourusername/dev-helper"
   },
   "engines": {
     "vscode": "^1.60.0",
@@ -19,8 +19,6 @@
     "Themes"
   ],
   "keywords": [
-    "tdah",
-    "adhd",
     "productivity",
     "focus",
     "task-management",
@@ -34,45 +32,45 @@
   "contributes": {
     "commands": [
       {
-        "command": "tdah-dev-helper.startFocus",
-        "title": "TDAH Dev Helper: Iniciar Modo Hiperfoco",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.startFocus",
+        "title": "Dev Helper: Iniciar Modo Hiperfoco",
+        "category": "Dev Helper"
       },
       {
-        "command": "tdah-dev-helper.stopFocus",
-        "title": "TDAH Dev Helper: Parar Modo Hiperfoco",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.stopFocus",
+        "title": "Dev Helper: Parar Modo Hiperfoco",
+        "category": "Dev Helper"
       },
       {
-        "command": "tdah-dev-helper.showDashboard",
-        "title": "TDAH Dev Helper: Mostrar Dashboard",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.showDashboard",
+        "title": "Dev Helper: Mostrar Dashboard",
+        "category": "Dev Helper"
       },
       {
-        "command": "tdah-dev-helper.createTask",
-        "title": "TDAH Dev Helper: Criar Tarefa",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.createTask",
+        "title": "Dev Helper: Criar Tarefa",
+        "category": "Dev Helper"
       },
       {
-        "command": "tdah-dev-helper.decomposeTask",
-        "title": "TDAH Dev Helper: Decompor Tarefa",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.decomposeTask",
+        "title": "Dev Helper: Decompor Tarefa",
+        "category": "Dev Helper"
       },
       {
-        "command": "tdah-dev-helper.showBlockedNotifications",
-        "title": "TDAH Dev Helper: Mostrar Notificações Bloqueadas",
-        "category": "TDAH Dev Helper"
+        "command": "dev-helper.showBlockedNotifications",
+        "title": "Dev Helper: Mostrar Notificações Bloqueadas",
+        "category": "Dev Helper"
       }
     ],
     "keybindings": [
       {
-        "command": "tdah-dev-helper.startFocus",
+        "command": "dev-helper.startFocus",
         "key": "ctrl+shift+h",
         "mac": "cmd+shift+h",
         "when": "editorTextFocus"
       },
       {
-        "command": "tdah-dev-helper.stopFocus",
+        "command": "dev-helper.stopFocus",
         "key": "ctrl+shift+j",
         "mac": "cmd+shift+j",
         "when": "editorTextFocus"
@@ -81,16 +79,16 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "tdah-dev-helper-sidebar",
-          "title": "TDAH Dev Helper",
+          "id": "dev-helper-sidebar",
+          "title": "Dev Helper",
           "icon": "media/dashboard.svg"
         }
       ]
     },
     "views": {
-      "tdah-dev-helper-sidebar": [
+      "dev-helper-sidebar": [
         {
-          "id": "tdah-dev-helper.dashboard",
+          "id": "dev-helper.dashboard",
           "name": "Dashboard",
           "type": "webview",
           "initialSize": 500
@@ -99,28 +97,28 @@
     },
     "viewsWelcome": [
       {
-        "view": "tdah-dev-helper.dashboard",
-        "contents": "Bem-vindo ao Dashboard do TDAH Dev Helper!\n\n[Iniciar Modo Hiperfoco](command:tdah-dev-helper.startFocus)\n[Criar Nova Tarefa](command:tdah-dev-helper.createTask)\n[Decompor Tarefa](command:tdah-dev-helper.decomposeTask)\n[Mostrar Notificações Bloqueadas](command:tdah-dev-helper.showBlockedNotifications)"
+        "view": "dev-helper.dashboard",
+        "contents": "Bem-vindo ao Dashboard do Dev Helper!\n\n[Iniciar Modo Hiperfoco](command:dev-helper.startFocus)\n[Criar Nova Tarefa](command:dev-helper.createTask)\n[Decompor Tarefa](command:dev-helper.decomposeTask)\n[Mostrar Notificações Bloqueadas](command:dev-helper.showBlockedNotifications)"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "command": "tdah-dev-helper.createTask",
-          "group": "tdah-dev-helper@1",
+          "command": "dev-helper.createTask",
+          "group": "dev-helper@1",
           "when": "editorTextFocus"
         },
         {
-          "command": "tdah-dev-helper.decomposeTask",
-          "group": "tdah-dev-helper@1",
+          "command": "dev-helper.decomposeTask",
+          "group": "dev-helper@1",
           "when": "editorTextFocus"
         }
       ],
       "view/title": [
         {
-          "command": "tdah-dev-helper.showDashboard",
+          "command": "dev-helper.showDashboard",
           "group": "navigation",
-          "when": "view == tdah-dev-helper.dashboard"
+          "when": "view == dev-helper.dashboard"
         }
       ]
     },
@@ -142,34 +140,34 @@
       }
     ],
     "configuration": {
-      "title": "TDAH Dev Helper",
+      "title": "Dev Helper",
       "properties": {
-        "tdahDevHelper.theme": {
+        "devHelper.theme": {
           "type": "string",
           "enum": [
-            "tdah-light",
-            "tdah-dark",
-            "tdah-high-contrast"
+            "dev-helper-light",
+            "dev-helper-dark",
+            "dev-helper-high-contrast"
           ],
-          "default": "tdah-light",
-          "description": "Tema otimizado para desenvolvedores com TDAH"
+          "default": "dev-helper-light",
+          "description": "Tema otimizado para desenvolvedores"
         },
-        "tdahDevHelper.apiUrl": {
+        "devHelper.apiUrl": {
           "type": "string",
           "default": "",
-          "description": "URL da API do TDAH Dev Helper (opcional)"
+          "description": "URL da API do Dev Helper (opcional)"
         },
-        "tdahDevHelper.notificationBlocking": {
+        "devHelper.notificationBlocking": {
           "type": "boolean",
           "default": true,
           "description": "Ativar bloqueio de notificações durante o modo hiperfoco"
         },
-        "tdahDevHelper.gamification": {
+        "devHelper.gamification": {
           "type": "boolean",
           "default": false,
           "description": "Ativar sistema de gamificação"
         },
-        "tdahDevHelper.debug": {
+        "devHelper.debug": {
           "type": "boolean",
           "default": true,
           "description": "Ativar modo debug para ver logs detalhados"

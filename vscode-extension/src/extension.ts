@@ -12,47 +12,47 @@ let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
 let dashboardView: DashboardView | null = null;
 
-// IDs dos comandos (sem timestamp para manter consistência)
+// IDs dos comandos
 const COMMANDS = {
-    startFocus: 'tdah-dev-helper.startFocus',
-    stopFocus: 'tdah-dev-helper.stopFocus',
-    showDashboard: 'tdah-dev-helper.showDashboard',
-    createTask: 'tdah-dev-helper.createTask',
-    decomposeTask: 'tdah-dev-helper.decomposeTask',
-    showBlockedNotifications: 'tdah-dev-helper.showBlockedNotifications'
+    startFocus: 'dev-helper.startFocus',
+    stopFocus: 'dev-helper.stopFocus',
+    showDashboard: 'dev-helper.showDashboard',
+    createTask: 'dev-helper.createTask',
+    decomposeTask: 'dev-helper.decomposeTask',
+    showBlockedNotifications: 'dev-helper.showBlockedNotifications'
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    console.warn('TDAH Dev Helper: Iniciando ativação...');
+    console.warn('Dev Helper: Iniciando ativação...');
 
     try {
         // Limpar o contexto anterior
         context.subscriptions.forEach(d => d.dispose());
         context.subscriptions.length = 0;
 
-        console.warn('TDAH Dev Helper: Inicializando HyperfocusManager...');
+        console.warn('Dev Helper: Inicializando HyperfocusManager...');
         hyperfocusManager = HyperfocusManager.getInstance();
-        console.warn('TDAH Dev Helper: HyperfocusManager inicializado');
+        console.warn('Dev Helper: HyperfocusManager inicializado');
 
-        console.warn('TDAH Dev Helper: Inicializando NotificationBlocker...');
+        console.warn('Dev Helper: Inicializando NotificationBlocker...');
         notificationBlocker = new NotificationBlocker();
-        console.warn('TDAH Dev Helper: NotificationBlocker inicializado');
+        console.warn('Dev Helper: NotificationBlocker inicializado');
 
-        console.warn('TDAH Dev Helper: Inicializando TaskTracker...');
+        console.warn('Dev Helper: Inicializando TaskTracker...');
         taskTracker = TaskTracker.getInstance(context);
-        console.warn('TDAH Dev Helper: TaskTracker inicializado');
+        console.warn('Dev Helper: TaskTracker inicializado');
 
         // Inicializar o DashboardView
         if (hyperfocusManager && taskTracker) {
-            console.warn('TDAH Dev Helper: Inicializando DashboardView...');
+            console.warn('Dev Helper: Inicializando DashboardView...');
             dashboardView = DashboardView.getInstance(context);
-            console.warn('TDAH Dev Helper: DashboardView inicializado');
+            console.warn('Dev Helper: DashboardView inicializado');
         }
 
         // Registrar o provider da view do dashboard
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(
-                'tdah-dev-helper.dashboard',
+                'dev-helper.dashboard',
                 {
                     resolveWebviewView: (webviewView) => {
                         if (dashboardView) {
@@ -68,24 +68,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
 
         // Inicializar componentes opcionais baseados na configuração
-        const config = vscode.workspace.getConfiguration('tdahDevHelper');
+        const config = vscode.workspace.getConfiguration('devHelper');
         const apiUrl = config.get<string>('apiUrl');
         const debug = config.get<boolean>('debug');
 
         if (debug) {
-            console.warn('TDAH Dev Helper: Modo debug ativado');
-            console.warn('TDAH Dev Helper: API URL:', apiUrl || 'não configurada');
-            console.warn('TDAH Dev Helper: Diretório de extensão:', context.extensionPath);
-            console.warn('TDAH Dev Helper: Ambiente de desenvolvimento:', process.env.NODE_ENV);
+            console.warn('Dev Helper: Modo debug ativado');
+            console.warn('Dev Helper: API URL:', apiUrl || 'não configurada');
+            console.warn('Dev Helper: Diretório de extensão:', context.extensionPath);
+            console.warn('Dev Helper: Ambiente de desenvolvimento:', process.env.NODE_ENV);
         }
 
         if (apiUrl) {
             try {
                 apiClient = new ApiClient(apiUrl);
             } catch (error) {
-                console.error('TDAH Dev Helper: Erro ao inicializar API:', error);
+                console.error('Dev Helper: Erro ao inicializar API:', error);
                 vscode.window.showWarningMessage(
-                    'TDAH Dev Helper: API não disponível. Algumas funcionalidades estarão limitadas.'
+                    'Dev Helper: API não disponível. Algumas funcionalidades estarão limitadas.'
                 );
             }
         }
@@ -131,7 +131,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             vscode.commands.registerCommand(COMMANDS.showDashboard, async () => {
                 try {
-                    await vscode.commands.executeCommand('tdah-dev-helper.dashboard.focus');
+                    await vscode.commands.executeCommand('dev-helper.dashboard.focus');
                 } catch (error) {
                     console.error('Erro ao mostrar dashboard:', error);
                     vscode.window.showErrorMessage('Erro ao mostrar dashboard. Por favor, tente novamente.');
@@ -183,11 +183,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         });
 
-        console.warn('TDAH Dev Helper: Ativação concluída com sucesso');
+        console.warn('Dev Helper: Ativação concluída com sucesso');
     } catch (error) {
-        console.error('TDAH Dev Helper: Erro detalhado ao ativar a extensão:', error);
+        console.error('Dev Helper: Erro detalhado ao ativar a extensão:', error);
         if (error instanceof Error) {
-            console.error('TDAH Dev Helper: Stack trace:', error.stack);
+            console.error('Dev Helper: Stack trace:', error.stack);
         }
         throw error;
     }
