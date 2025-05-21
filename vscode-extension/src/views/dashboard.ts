@@ -64,140 +64,242 @@ export class DashboardView {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Dashboard TDAH Dev Helper</title>
                 <style>
+                    :root {
+                        --grid-gap: 1rem;
+                        --card-padding: 1rem;
+                        --border-radius: 6px;
+                    }
+
                     body {
                         font-family: var(--vscode-font-family);
                         color: var(--vscode-foreground);
-                        padding: 1rem;
+                        padding: 0.5rem;
+                        margin: 0;
+                        box-sizing: border-box;
+                        min-height: 100vh;
                     }
+
                     .container {
-                        max-width: 1200px;
+                        max-width: 100%;
                         margin: 0 auto;
+                        padding: 0.5rem;
                     }
+
                     .header {
                         display: flex;
+                        flex-wrap: wrap;
+                        gap: var(--grid-gap);
                         justify-content: space-between;
                         align-items: center;
-                        margin-bottom: 2rem;
+                        margin-bottom: 1rem;
+                        padding: 0.5rem;
                     }
+
+                    .header h1 {
+                        font-size: clamp(1.2rem, 4vw, 1.5rem);
+                        margin: 0;
+                    }
+
                     .actions {
                         display: flex;
-                        gap: 1rem;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
                     }
+
                     .button {
                         padding: 0.5rem 1rem;
                         border: none;
-                        border-radius: 4px;
+                        border-radius: var(--border-radius);
                         cursor: pointer;
                         font-size: 0.875rem;
+                        white-space: nowrap;
                         background: var(--vscode-button-background);
                         color: var(--vscode-button-foreground);
+                        transition: background-color 0.2s;
                     }
-                    .button.primary {
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
+
+                    .button:hover {
+                        background: var(--vscode-button-hoverBackground);
                     }
+
                     .analytics-grid {
                         display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                        gap: 1rem;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: var(--grid-gap);
                         margin: 1rem 0;
                     }
+
                     .analytics-card {
                         background: var(--vscode-editor-background);
                         border: 1px solid var(--vscode-panel-border);
-                        border-radius: 6px;
-                        padding: 1rem;
+                        border-radius: var(--border-radius);
+                        padding: var(--card-padding);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.5rem;
                     }
+
                     .analytics-card h3 {
-                        margin: 0 0 0.5rem 0;
-                        font-size: 1rem;
+                        margin: 0;
+                        font-size: 0.9rem;
+                        color: var(--vscode-descriptionForeground);
                     }
+
                     .analytics-value {
-                        font-size: 1.5rem;
+                        font-size: clamp(1.2rem, 3vw, 1.5rem);
                         font-weight: bold;
                         color: var(--vscode-textLink-foreground);
                     }
+
                     .analytics-label {
-                        font-size: 0.875rem;
+                        font-size: 0.8rem;
                         color: var(--vscode-descriptionForeground);
                     }
+
                     .insights-section {
-                        margin-top: 2rem;
-                        padding: 1rem;
+                        margin: 1rem 0;
+                        padding: var(--card-padding);
                         background: var(--vscode-editor-background);
                         border: 1px solid var(--vscode-panel-border);
-                        border-radius: 6px;
+                        border-radius: var(--border-radius);
                     }
+
+                    .insights-section h2 {
+                        font-size: clamp(1.1rem, 3vw, 1.3rem);
+                        margin: 0 0 1rem 0;
+                    }
+
                     .insights-grid {
                         display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                        gap: 1rem;
-                        margin-top: 1rem;
+                        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                        gap: var(--grid-gap);
                     }
+
                     .insight-item {
-                        padding: 0.5rem;
+                        padding: 0.75rem;
                         background: var(--vscode-editor-inactiveSelectionBackground);
-                        border-radius: 4px;
+                        border-radius: var(--border-radius);
                     }
+
                     .insight-label {
-                        font-size: 0.875rem;
+                        font-size: 0.8rem;
                         color: var(--vscode-descriptionForeground);
                     }
+
                     .insight-value {
-                        font-size: 1.125rem;
+                        font-size: clamp(0.9rem, 2.5vw, 1.1rem);
                         color: var(--vscode-textLink-foreground);
                         margin-top: 0.25rem;
+                        word-break: break-word;
                     }
+
+                    .tasks-section {
+                        margin: 1rem 0;
+                    }
+
+                    .tasks-section h2 {
+                        font-size: clamp(1.1rem, 3vw, 1.3rem);
+                        margin: 0 0 1rem 0;
+                    }
+
                     .task-list {
-                        margin-top: 2rem;
+                        display: grid;
+                        gap: var(--grid-gap);
                     }
+
                     .task-item {
                         background: var(--vscode-editor-background);
                         border: 1px solid var(--vscode-panel-border);
-                        border-radius: 6px;
-                        padding: 1rem;
-                        margin-bottom: 1rem;
+                        border-radius: var(--border-radius);
+                        padding: var(--card-padding);
                     }
+
                     .task-header {
                         display: flex;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
                         justify-content: space-between;
-                        align-items: center;
+                        align-items: flex-start;
                         margin-bottom: 0.5rem;
                     }
+
                     .task-header h3 {
                         margin: 0;
-                        font-size: 1rem;
+                        font-size: clamp(0.9rem, 2.5vw, 1rem);
+                        flex: 1;
+                        min-width: 200px;
                     }
+
                     .task-status {
-                        font-size: 0.875rem;
+                        font-size: 0.8rem;
                         padding: 0.25rem 0.5rem;
-                        border-radius: 4px;
+                        border-radius: var(--border-radius);
                         background: var(--vscode-badge-background);
                         color: var(--vscode-badge-foreground);
+                        white-space: nowrap;
                     }
+
                     .task-description {
                         margin: 0.5rem 0;
                         font-size: 0.875rem;
                         color: var(--vscode-descriptionForeground);
+                        word-break: break-word;
                     }
+
                     .subtasks {
                         margin-top: 0.5rem;
                         padding-top: 0.5rem;
                         border-top: 1px solid var(--vscode-panel-border);
                     }
+
                     .subtask {
                         display: flex;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
                         justify-content: space-between;
                         align-items: center;
-                        padding: 0.25rem 0;
+                        padding: 0.5rem 0;
                         font-size: 0.875rem;
                     }
+
                     .subtask.completed {
                         color: var(--vscode-descriptionForeground);
                         text-decoration: line-through;
                     }
+
+                    .subtask-title {
+                        flex: 1;
+                        min-width: 150px;
+                        word-break: break-word;
+                    }
+
                     .subtask-time {
                         color: var(--vscode-descriptionForeground);
+                        white-space: nowrap;
+                    }
+
+                    @media (max-width: 480px) {
+                        .header {
+                            flex-direction: column;
+                            align-items: stretch;
+                        }
+
+                        .actions {
+                            justify-content: stretch;
+                        }
+
+                        .button {
+                            flex: 1;
+                            text-align: center;
+                        }
+
+                        .analytics-grid {
+                            grid-template-columns: 1fr;
+                        }
+
+                        .insights-grid {
+                            grid-template-columns: 1fr;
+                        }
                     }
                 </style>
             </head>
