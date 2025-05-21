@@ -21,6 +21,11 @@ export interface UserData {
     xp_points: number;
     xp_for_next_level: number;
     title: string;
+    streak: number;
+    totalFocusTime: number;
+    totalTasks: number;
+    totalSubtasks: number;
+    totalFocusSessions: number;
 }
 
 export class GamificationManager {
@@ -31,21 +36,96 @@ export class GamificationManager {
     private levelUpRewards: LevelUpReward[] = [];
     private currentUserData: UserData | null = null;
 
-    private constructor() {
+    private constructor(private context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
             98
         );
         this.initializeAchievements();
         this.initializeLevelRewards();
-        this.initializeUserData();
+        this.loadUserData();
     }
 
-    public static getInstance(): GamificationManager {
+    public static getInstance(context?: vscode.ExtensionContext): GamificationManager {
         if (!GamificationManager.instance) {
-            GamificationManager.instance = new GamificationManager();
+            if (!context) {
+                throw new Error('Context is required to initialize GamificationManager');
+            }
+            GamificationManager.instance = new GamificationManager(context);
         }
         return GamificationManager.instance;
+    }
+
+    private loadUserData(): void {
+        try {
+            const savedData = this.context.globalState.get<UserData>('dev-helper-gamification-data');
+            if (savedData) {
+                this.currentUserData = savedData;
+            } else {
+                // Inicializar com dados padrão
+                this.currentUserData = {
+                    level: 1,
+                    xp_points: 0,
+                    xp_for_next_level: 100,
+                    title: 'Iniciante',
+                    streak: 0,
+                    totalFocusTime: 0,
+                    totalTasks: 0,
+                    totalSubtasks: 0,
+                    totalFocusSessions: 0
+                };
+                this.saveUserData();
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados de gamificação:', error);
+            vscode.window.showErrorMessage('Erro ao carregar dados de gamificação');
+            // Inicializar com dados padrão em caso de erro
+            this.currentUserData = {
+                level: 1,
+                xp_points: 0,
+                xp_for_next_level: 100,
+                title: 'Iniciante',
+                streak: 0,
+                totalFocusTime: 0,
+                totalTasks: 0,
+                totalSubtasks: 0,
+                totalFocusSessions: 0
+            };
+        }
+    }
+
+    private async saveUserData(): Promise<void> {
+        try {
+            await this.context.globalState.update('dev-helper-gamification-data', this.currentUserData);
+        } catch (error) {
+            console.error('Erro ao salvar dados de gamificação:', error);
+            vscode.window.showErrorMessage('Erro ao salvar dados de gamificação');
+        }
+    }
+
+    private async loadAchievements(): Promise<void> {
+        try {
+            const savedAchievements = this.context.globalState.get<Achievement[]>('dev-helper-achievements');
+            if (savedAchievements) {
+                this.achievements = savedAchievements;
+            } else {
+                this.initializeAchievements();
+                await this.saveAchievements();
+            }
+        } catch (error) {
+            console.error('Erro ao carregar conquistas:', error);
+            vscode.window.showErrorMessage('Erro ao carregar conquistas');
+            this.initializeAchievements();
+        }
+    }
+
+    private async saveAchievements(): Promise<void> {
+        try {
+            await this.context.globalState.update('dev-helper-achievements', this.achievements);
+        } catch (error) {
+            console.error('Erro ao salvar conquistas:', error);
+            vscode.window.showErrorMessage('Erro ao salvar conquistas');
+        }
     }
 
     private initializeUserData(): void {
@@ -54,12 +134,18 @@ export class GamificationManager {
             level: 1,
             xp_points: 0,
             xp_for_next_level: 100,
-            title: 'Iniciante'
+            title: 'Iniciante',
+            streak: 0,
+            totalFocusTime: 0,
+            totalTasks: 0,
+            totalSubtasks: 0,
+            totalFocusSessions: 0
         };
     }
 
     private initializeAchievements(): void {
         this.achievements = [
+            // Conquistas de Tarefas
             {
                 id: 'first_task',
                 title: 'Primeira Tarefa',
@@ -68,6 +154,21 @@ export class GamificationManager {
                 xpReward: 100
             },
             {
+                id: 'task_warrior',
+                title: 'Guerreiro das Tarefas',
+                description: 'Complete 50 tarefas',
+                icon: '$(shield)',
+                xpReward: 1000
+            },
+            {
+                id: 'task_master',
+                title: 'Mestre das Tarefas',
+                description: 'Complete 100 tarefas',
+                icon: '$(crown)',
+                xpReward: 2000
+            },
+            // Conquistas de Hiperfoco
+            {
                 id: 'focus_master',
                 title: 'Mestre do Foco',
                 description: 'Complete 10 sessões de hiperfoco',
@@ -75,12 +176,13 @@ export class GamificationManager {
                 xpReward: 500
             },
             {
-                id: 'task_warrior',
-                title: 'Guerreiro das Tarefas',
-                description: 'Complete 50 tarefas',
-                icon: '$(shield)',
-                xpReward: 1000
+                id: 'focus_legend',
+                title: 'Lenda do Foco',
+                description: 'Complete 50 sessões de hiperfoco',
+                icon: '$(star)',
+                xpReward: 1500
             },
+            // Conquistas de Tempo
             {
                 id: 'early_bird',
                 title: 'Madrugador',
@@ -94,6 +196,58 @@ export class GamificationManager {
                 description: 'Complete uma tarefa após as 22h',
                 icon: '$(moon)',
                 xpReward: 300
+            },
+            // Conquistas de Produtividade
+            {
+                id: 'streak_3',
+                title: 'Em Ritmo',
+                description: 'Mantenha um streak de 3 dias',
+                icon: '$(flame)',
+                xpReward: 400
+            },
+            {
+                id: 'streak_7',
+                title: 'Em Chamas',
+                description: 'Mantenha um streak de 7 dias',
+                icon: '$(flame)',
+                xpReward: 1000
+            },
+            {
+                id: 'streak_30',
+                title: 'Incendiário',
+                description: 'Mantenha um streak de 30 dias',
+                icon: '$(flame)',
+                xpReward: 5000
+            },
+            // Conquistas de Subtarefas
+            {
+                id: 'subtask_master',
+                title: 'Mestre das Subtarefas',
+                description: 'Complete 100 subtarefas',
+                icon: '$(checklist)',
+                xpReward: 800
+            },
+            // Conquistas de Tempo Total
+            {
+                id: 'time_1h',
+                title: 'Primeira Hora',
+                description: 'Acumule 1 hora de tempo focado',
+                icon: '$(clock)',
+                xpReward: 200
+            },
+            {
+                id: 'time_10h',
+                title: 'Dez Horas',
+                description: 'Acumule 10 horas de tempo focado',
+                icon: '$(clock)',
+                xpReward: 1000
+            },
+            {
+                id: 'time_100h',
+                title: 'Centenário',
+                description: 'Acumule 100 horas de tempo focado',
+                icon: '$(clock)',
+                xpReward: 5000
             }
         ];
     }
@@ -104,25 +258,55 @@ export class GamificationManager {
                 level: 5,
                 title: 'Aprendiz',
                 description: 'Você está começando sua jornada!',
-                rewards: ['Tema personalizado', 'Badge de Aprendiz']
+                rewards: [
+                    'Tema personalizado "Matrix"',
+                    'Badge de Aprendiz',
+                    'Acesso a estatísticas básicas'
+                ]
             },
             {
                 level: 10,
                 title: 'Iniciado',
                 description: 'Você está progredindo bem!',
-                rewards: ['Novos ícones', 'Badge de Iniciado']
+                rewards: [
+                    'Novos ícones personalizados',
+                    'Badge de Iniciado',
+                    'Acesso a estatísticas avançadas',
+                    'Tema "Cyberpunk"'
+                ]
             },
             {
                 level: 20,
                 title: 'Adepto',
                 description: 'Você está se tornando um mestre!',
-                rewards: ['Tema exclusivo', 'Badge de Adepto']
+                rewards: [
+                    'Tema exclusivo "Neon"',
+                    'Badge de Adepto',
+                    'Acesso a recursos beta',
+                    'Personalização de notificações'
+                ]
             },
             {
                 level: 30,
                 title: 'Mestre',
                 description: 'Você é um verdadeiro mestre da produtividade!',
-                rewards: ['Tema premium', 'Badge de Mestre']
+                rewards: [
+                    'Tema premium "Quantum"',
+                    'Badge de Mestre',
+                    'Acesso a todos os recursos',
+                    'Personalização completa da interface'
+                ]
+            },
+            {
+                level: 50,
+                title: 'Lenda',
+                description: 'Você transcendeu os limites da produtividade!',
+                rewards: [
+                    'Tema lendário "Cosmic"',
+                    'Badge de Lenda',
+                    'Acesso antecipado a novos recursos',
+                    'Personalização avançada de temas'
+                ]
             }
         ];
     }
@@ -160,22 +344,48 @@ export class GamificationManager {
     }
 
     private async checkAchievements(): Promise<void> {
-        // Verificar conquistas localmente
-        const hour = new Date().getHours();
-
         // Verificar conquistas baseadas em tempo
+        const hour = new Date().getHours();
         if (hour >= 5 && hour < 9) {
-            this.unlockAchievement('early_bird');
+            await this.unlockAchievement('early_bird');
         } else if (hour >= 22 || hour < 5) {
-            this.unlockAchievement('night_owl');
+            await this.unlockAchievement('night_owl');
         }
+
+        // Verificar conquistas de streak
+        const streak = this.currentUserData?.streak || 0;
+        if (streak >= 3) await this.unlockAchievement('streak_3');
+        if (streak >= 7) await this.unlockAchievement('streak_7');
+        if (streak >= 30) await this.unlockAchievement('streak_30');
+
+        // Verificar conquistas de tempo total
+        const totalFocusTime = this.currentUserData?.totalFocusTime || 0;
+        const totalFocusHours = totalFocusTime / 60;
+        if (totalFocusHours >= 1) await this.unlockAchievement('time_1h');
+        if (totalFocusHours >= 10) await this.unlockAchievement('time_10h');
+        if (totalFocusHours >= 100) await this.unlockAchievement('time_100h');
+
+        // Verificar conquistas de tarefas
+        const totalTasks = this.currentUserData?.totalTasks || 0;
+        if (totalTasks >= 50) await this.unlockAchievement('task_warrior');
+        if (totalTasks >= 100) await this.unlockAchievement('task_master');
+
+        // Verificar conquistas de subtarefas
+        const totalSubtasks = this.currentUserData?.totalSubtasks || 0;
+        if (totalSubtasks >= 100) await this.unlockAchievement('subtask_master');
+
+        // Verificar conquistas de hiperfoco
+        const totalFocusSessions = this.currentUserData?.totalFocusSessions || 0;
+        if (totalFocusSessions >= 10) await this.unlockAchievement('focus_master');
+        if (totalFocusSessions >= 50) await this.unlockAchievement('focus_legend');
     }
 
-    private unlockAchievement(achievementId: string): void {
+    private async unlockAchievement(achievementId: string): Promise<void> {
         const achievement = this.achievements.find(a => a.id === achievementId);
         if (achievement && !achievement.unlockedAt) {
             achievement.unlockedAt = Date.now();
-            this.addXP(achievement.xpReward);
+            await this.addXP(achievement.xpReward);
+            await this.saveAchievements();
             vscode.window.showInformationMessage(
                 `🏆 Conquista Desbloqueada: ${achievement.title}! +${achievement.xpReward} XP`
             );
@@ -184,7 +394,7 @@ export class GamificationManager {
 
     public async onTaskCompleted(xpEarned: number): Promise<void> {
         const oldLevel = this.currentUserData!.level;
-        this.addXP(xpEarned);
+        await this.addXP(xpEarned);
 
         if (this.currentUserData!.level > oldLevel) {
             await this.handleLevelUp();
@@ -198,7 +408,7 @@ export class GamificationManager {
         this.updateStatusBar();
     }
 
-    private addXP(amount: number): void {
+    private async addXP(amount: number): Promise<void> {
         this.currentUserData!.xp_points += amount;
 
         // Calcular novo nível
@@ -210,6 +420,9 @@ export class GamificationManager {
 
         // Atualizar XP necessário para próximo nível
         this.currentUserData!.xp_for_next_level = newLevel * 100;
+
+        // Salvar dados atualizados
+        await this.saveUserData();
     }
 
     private getLevelTitle(level: number): string {
@@ -332,8 +545,11 @@ export class GamificationManager {
     }
 
     private getProfileContent(): string {
-        const { level, xp_points, xp_for_next_level, title } = this.currentUserData!;
+        const { level, xp_points, xp_for_next_level, title, streak, totalFocusTime, totalTasks, totalSubtasks, totalFocusSessions } = this.currentUserData!;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
+        const unlockedAchievements = this.achievements.filter(a => a.unlockedAt);
+        const lockedAchievements = this.achievements.filter(a => !a.unlockedAt);
+        const nextLevelReward = this.levelUpRewards.find(r => r.level > level);
 
         return `
             <!DOCTYPE html>
@@ -354,95 +570,203 @@ export class GamificationManager {
                     }
                     .profile-title {
                         font-size: 2em;
-                        margin-bottom: 10px;
+                        margin: 0;
                         color: var(--vscode-textLink-foreground);
                     }
-                    .level-badge {
-                        display: inline-block;
-                        padding: 5px 10px;
-                        background-color: var(--vscode-badge-background);
-                        color: var(--vscode-badge-foreground);
-                        border-radius: 15px;
+                    .profile-subtitle {
+                        color: var(--vscode-descriptionForeground);
+                        margin: 5px 0;
+                    }
+                    .stats-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                        gap: 20px;
+                        margin-bottom: 30px;
+                    }
+                    .stat-card {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        padding: 15px;
+                        border-radius: 8px;
+                        text-align: center;
+                    }
+                    .stat-value {
+                        font-size: 1.5em;
+                        font-weight: bold;
+                        color: var(--vscode-textLink-foreground);
+                    }
+                    .stat-label {
+                        color: var(--vscode-descriptionForeground);
                         font-size: 0.9em;
                     }
-                    .xp-bar-container {
+                    .progress-container {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        border-radius: 10px;
+                        padding: 20px;
+                        margin-bottom: 30px;
+                    }
+                    .progress-bar {
                         width: 100%;
                         height: 20px;
-                        background-color: var(--vscode-editor-inactiveSelectionBackground);
+                        background: var(--vscode-progressBar-background);
                         border-radius: 10px;
                         overflow: hidden;
-                        margin: 20px 0;
+                        margin: 10px 0;
                     }
-                    .xp-bar {
+                    .progress-fill {
                         height: 100%;
-                        background-color: var(--vscode-progressBar-background);
+                        background: var(--vscode-textLink-foreground);
                         transition: width 0.3s ease;
                     }
                     .achievements-section {
-                        margin-top: 30px;
+                        margin-bottom: 30px;
                     }
-                    .achievement-grid {
+                    .section-title {
+                        font-size: 1.2em;
+                        margin-bottom: 15px;
+                        color: var(--vscode-textLink-foreground);
+                    }
+                    .achievements-grid {
                         display: grid;
-                        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
                         gap: 15px;
-                        margin-top: 15px;
                     }
                     .achievement-card {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
                         padding: 15px;
-                        background-color: var(--vscode-editor-inactiveSelectionBackground);
-                        border-radius: 4px;
-                        text-align: center;
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
                     }
                     .achievement-icon {
-                        font-size: 2em;
-                        margin-bottom: 10px;
+                        font-size: 1.5em;
+                    }
+                    .achievement-info {
+                        flex: 1;
                     }
                     .achievement-title {
                         font-weight: bold;
-                        margin-bottom: 5px;
+                        margin: 0;
                     }
                     .achievement-description {
-                        font-size: 0.9em;
                         color: var(--vscode-descriptionForeground);
+                        font-size: 0.9em;
+                        margin: 5px 0;
+                    }
+                    .achievement-xp {
+                        color: var(--vscode-textLink-foreground);
+                        font-size: 0.9em;
                     }
                     .achievement-locked {
-                        opacity: 0.5;
+                        opacity: 0.6;
+                    }
+                    .next-reward {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin-top: 20px;
+                    }
+                    .next-reward-title {
+                        color: var(--vscode-textLink-foreground);
+                        margin: 0 0 10px 0;
+                    }
+                    .rewards-list {
+                        list-style: none;
+                        padding: 0;
+                        margin: 0;
+                    }
+                    .reward-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin: 5px 0;
+                    }
+                    .reward-icon {
+                        color: var(--vscode-textLink-foreground);
                     }
                 </style>
             </head>
             <body>
                 <div class="profile-header">
                     <h1 class="profile-title">${title}</h1>
-                    <span class="level-badge">Nível ${level}</span>
+                    <p class="profile-subtitle">Nível ${level}</p>
                 </div>
 
-                <div class="xp-bar-container">
-                    <div class="xp-bar" style="width: ${progress}%"></div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${streak}</div>
+                        <div class="stat-label">Dias Consecutivos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${Math.round(totalFocusTime / 60)}h</div>
+                        <div class="stat-label">Tempo Total Focado</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalTasks}</div>
+                        <div class="stat-label">Tarefas Completadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalFocusSessions}</div>
+                        <div class="stat-label">Sessões de Hiperfoco</div>
+                    </div>
                 </div>
-                <div style="text-align: center">
-                    ${xp_points}/${xp_for_next_level} XP (${progress}%)
+
+                <div class="progress-container">
+                    <div class="section-title">Progresso para o Próximo Nível</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <div style="text-align: center">
+                        ${xp_points}/${xp_for_next_level} XP (${progress}%)
+                    </div>
                 </div>
 
                 <div class="achievements-section">
-                    <h2>Conquistas</h2>
-                    <div class="achievement-grid">
-                        ${this.achievements.map(achievement => `
-                            <div class="achievement-card ${achievement.unlockedAt ? '' : 'achievement-locked'}">
+                    <div class="section-title">Conquistas Desbloqueadas</div>
+                    <div class="achievements-grid">
+                        ${unlockedAchievements.map(achievement => `
+                            <div class="achievement-card">
                                 <div class="achievement-icon">${achievement.icon}</div>
-                                <div class="achievement-title">${achievement.title}</div>
-                                <div class="achievement-description">${achievement.description}</div>
-                                ${achievement.unlockedAt ? 
-                                    `<div style="font-size: 0.8em; margin-top: 5px">
-                                        Desbloqueado em ${new Date(achievement.unlockedAt).toLocaleDateString()}
-                                    </div>` : 
-                                    `<div style="font-size: 0.8em; margin-top: 5px">
-                                        Recompensa: ${achievement.xpReward} XP
-                                    </div>`
-                                }
+                                <div class="achievement-info">
+                                    <h3 class="achievement-title">${achievement.title}</h3>
+                                    <p class="achievement-description">${achievement.description}</p>
+                                    <div class="achievement-xp">+${achievement.xpReward} XP</div>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
                 </div>
+
+                <div class="achievements-section">
+                    <div class="section-title">Conquistas Pendentes</div>
+                    <div class="achievements-grid">
+                        ${lockedAchievements.map(achievement => `
+                            <div class="achievement-card achievement-locked">
+                                <div class="achievement-icon">${achievement.icon}</div>
+                                <div class="achievement-info">
+                                    <h3 class="achievement-title">${achievement.title}</h3>
+                                    <p class="achievement-description">${achievement.description}</p>
+                                    <div class="achievement-xp">+${achievement.xpReward} XP</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                ${nextLevelReward ? `
+                    <div class="next-reward">
+                        <h2 class="next-reward-title">Próxima Recompensa - Nível ${nextLevelReward.level}</h2>
+                        <p>${nextLevelReward.description}</p>
+                        <ul class="rewards-list">
+                            ${nextLevelReward.rewards.map(reward => `
+                                <li class="reward-item">
+                                    <span class="reward-icon">$(gift)</span>
+                                    <span>${reward}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
             </body>
             </html>
         `;

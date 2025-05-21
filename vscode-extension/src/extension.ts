@@ -4,6 +4,7 @@ import { TaskTracker } from './tasks/tracker';
 import { HyperfocusManager } from './hyperfocus/manager';
 import { NotificationBlocker } from './notifications/blocker';
 import { DashboardView } from './views/dashboard';
+import { GamificationManager } from './gamification/manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
@@ -11,6 +12,7 @@ let hyperfocusManager: HyperfocusManager | null = null;
 let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
 let dashboardView: DashboardView | null = null;
+let gamificationManager: GamificationManager | null = null;
 
 // IDs dos comandos
 const COMMANDS = {
@@ -41,6 +43,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         console.warn('Dev Helper: Inicializando TaskTracker...');
         taskTracker = TaskTracker.getInstance(context);
         console.warn('Dev Helper: TaskTracker inicializado');
+
+        console.warn('Dev Helper: Inicializando GamificationManager...');
+        gamificationManager = GamificationManager.getInstance(context);
+        await gamificationManager.initialize();
+        console.warn('Dev Helper: GamificationManager inicializado');
 
         // Inicializar o DashboardView
         if (hyperfocusManager && taskTracker) {

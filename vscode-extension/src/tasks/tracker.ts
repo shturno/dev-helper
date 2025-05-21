@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { sanitizeHtml, isValidInput, sanitizeTask, sanitizeForWebview } from '../utils/security';
-import { Task, Subtask, TaskValidation } from './types';
+import { Task, Subtask, TaskValidation, TaskPriority, PriorityCriteria } from './types';
+import { GamificationManager, UserData } from '../gamification/manager';
+import { PriorityManager } from './priority-manager';
 
 // Constantes de validação
 const MAX_TITLE_LENGTH = 100;
@@ -23,13 +25,19 @@ export class TaskTracker {
     private disposables: vscode.Disposable[] = [];
     private webviewPanel: vscode.WebviewPanel | null = null;
     private tasks: Task[] = [];
+    private gamificationManager: GamificationManager | null = null;
+    private priorityManager: PriorityManager;
 
     private constructor(private context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Left,
             100
         );
-        this.statusBarItem.command = 'tdah-dev-helper.selectTask';
+        this.statusBarItem.command = 'dev-helper.selectTask';
+        
+        // Inicializar gerenciadores
+        this.gamificationManager = GamificationManager.getInstance(context);
+        this.priorityManager = PriorityManager.getInstance();
         
         // Carregar tarefas salvas
         this.loadTasks();
@@ -142,7 +150,7 @@ export class TaskTracker {
         // Registrar comando para selecionar tarefa
         this.disposables.push(
             vscode.commands.registerCommand(
-                'tdah-dev-helper.selectTask',
+                'dev-helper.selectTask',
                 this.selectTask.bind(this)
             )
         );
@@ -150,7 +158,7 @@ export class TaskTracker {
         // Registrar comando para criar tarefa
         this.disposables.push(
             vscode.commands.registerCommand(
-                'tdah-dev-helper.createTask',
+                'dev-helper.createTask',
                 this.createTask.bind(this)
             )
         );
@@ -158,7 +166,7 @@ export class TaskTracker {
         // Registrar comando para mostrar detalhes da tarefa
         this.disposables.push(
             vscode.commands.registerCommand(
-                'tdah-dev-helper.showTaskDetails',
+                'dev-helper.showTaskDetails',
                 this.showTaskDetails.bind(this)
             )
         );
@@ -166,7 +174,7 @@ export class TaskTracker {
         // Registrar comando para decompor tarefa
         this.disposables.push(
             vscode.commands.registerCommand(
-                'tdah-dev-helper.decomposeTask',
+                'dev-helper.decomposeTask',
                 this.decomposeCurrentTask.bind(this)
             )
         );
@@ -246,17 +254,87 @@ export class TaskTracker {
                 }
             });
 
+            // Solicitar tempo estimado
+            const estimatedTimeStr = await vscode.window.showInputBox({
+                prompt: 'Tempo estimado (em minutos)',
+                placeHolder: 'Digite o tempo estimado em minutos',
+                validateInput: (value) => {
+                    const minutes = parseInt(value);
+                    if (isNaN(minutes)) return 'Digite um número válido';
+                    if (minutes < 0) return 'O tempo deve ser positivo';
+                    if (minutes > MAX_ESTIMATED_MINUTES) return `O tempo máximo é ${MAX_ESTIMATED_MINUTES} minutos`;
+                    return null;
+                }
+            });
+
+            if (!estimatedTimeStr) return;
+            const estimatedTime = parseInt(estimatedTimeStr);
+
+            // Solicitar complexidade
+            const complexityStr = await vscode.window.showQuickPick(
+                ['1 - Muito Simples', '2 - Simples', '3 - Médio', '4 - Complexo', '5 - Muito Complexo'],
+                { placeHolder: 'Selecione a complexidade da tarefa' }
+            );
+
+            if (!complexityStr) return;
+            const complexity = parseInt(complexityStr[0]);
+
+            // Solicitar impacto
+            const impactStr = await vscode.window.showQuickPick(
+                ['1 - Baixo Impacto', '2 - Impacto Moderado', '3 - Impacto Médio', '4 - Alto Impacto', '5 - Impacto Crítico'],
+                { placeHolder: 'Selecione o impacto da tarefa' }
+            );
+
+            if (!impactStr) return;
+            const impact = parseInt(impactStr[0]);
+
+            // Solicitar prazo (opcional)
+            let deadline: Date | undefined;
+            const hasDeadline = await vscode.window.showQuickPick(['Sim', 'Não'], {
+                placeHolder: 'Esta tarefa tem prazo?'
+            });
+
+            if (hasDeadline === 'Sim') {
+                const deadlineStr = await vscode.window.showInputBox({
+                    prompt: 'Prazo (DD/MM/YYYY)',
+                    placeHolder: 'Digite o prazo no formato DD/MM/YYYY',
+                    validateInput: (value) => {
+                        const date = new Date(value.split('/').reverse().join('-'));
+                        if (isNaN(date.getTime())) return 'Data inválida';
+                        if (date < new Date()) return 'A data não pode ser no passado';
+                        return null;
+                    }
+                });
+
+                if (deadlineStr) {
+                    deadline = new Date(deadlineStr.split('/').reverse().join('-'));
+                }
+            }
+
+            // Criar critérios de prioridade
+            const priorityCriteria = this.priorityManager.suggestPriorityCriteria(
+                estimatedTime,
+                complexity,
+                impact,
+                deadline
+            );
+
             // Criar nova tarefa
             const newTask: Task = {
                 id: Date.now(),
                 title: sanitizeHtml(title),
                 description: description ? sanitizeHtml(description) : '',
                 status: TaskStatus.PENDING,
+                priority: TaskPriority.MEDIUM, // Será atualizado pelo PriorityManager
+                priorityCriteria,
                 xpReward: DEFAULT_XP_REWARD,
                 subtasks: [],
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
+
+            // Atualizar prioridade baseado nos critérios
+            this.priorityManager.updateTaskPriority(newTask);
 
             // Validar tarefa antes de adicionar
             const validation = this.validateTask(newTask);
@@ -267,7 +345,21 @@ export class TaskTracker {
 
             this.tasks.push(newTask);
             await this.saveTasks();
-            vscode.window.showInformationMessage(`Tarefa "${newTask.title}" criada com sucesso!`);
+
+            // Notificar o sistema de gamificação sobre a nova tarefa
+            if (this.gamificationManager) {
+                const userData = await this.context.globalState.get<UserData>('dev-helper-gamification-data');
+                if (userData) {
+                    await this.context.globalState.update('dev-helper-gamification-data', {
+                        ...userData,
+                        totalTasks: (userData.totalTasks || 0) + 1
+                    });
+                }
+            }
+
+            vscode.window.showInformationMessage(
+                `Tarefa "${newTask.title}" criada com sucesso! Prioridade: ${newTask.priority}`
+            );
 
             // Perguntar se deseja decompor a tarefa
             const shouldDecompose = await vscode.window.showQuickPick(['Sim', 'Não'], {
@@ -434,6 +526,23 @@ export class TaskTracker {
             const allCompleted = this.currentTask.subtasks.every(s => s.completed);
             if (allCompleted) {
                 this.currentTask.status = TaskStatus.COMPLETED;
+                
+                // Notificar o sistema de gamificação
+                if (this.gamificationManager) {
+                    // Atualizar estatísticas
+                    const userData = await this.context.globalState.get<UserData>('dev-helper-gamification-data');
+                    if (userData) {
+                        await this.context.globalState.update('dev-helper-gamification-data', {
+                            ...userData,
+                            totalTasks: (userData.totalTasks || 0) + 1,
+                            totalSubtasks: (userData.totalSubtasks || 0) + this.currentTask.subtasks.length
+                        });
+                    }
+
+                    // Adicionar XP e verificar conquistas
+                    await this.gamificationManager.onTaskCompleted(this.currentTask.xpReward);
+                }
+
                 vscode.window.showInformationMessage('Parabéns! Tarefa concluída! 🎉');
             }
         }
@@ -610,6 +719,7 @@ export class TaskTracker {
     }
 
     public getTasks(): Task[] {
-        return [...this.tasks];
+        // Retornar tarefas ordenadas por prioridade
+        return this.priorityManager.sortTasksByPriority([...this.tasks]);
     }
 } 

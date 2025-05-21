@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { TaskTracker } from '../tasks/tracker';
 import { HyperfocusManager } from '../hyperfocus/manager';
 import { AnalysisManager } from '../analysis/manager';
+import { Task, TaskStatus, TaskPriority } from '../tasks/types';
+import { sanitizeForWebview } from '../utils/security';
 
 export class DashboardView {
     private static instance: DashboardView;
@@ -39,21 +41,77 @@ export class DashboardView {
                 ? `<div class="subtasks">
                     ${task.subtasks.map(subtask => 
                         `<div class="subtask ${subtask.completed ? 'completed' : ''}">
-                            <span class="subtask-title">${subtask.title}</span>
+                            <span class="subtask-title">${sanitizeForWebview(subtask.title)}</span>
                             <span class="subtask-time">${this.formatTime(subtask.estimatedMinutes)}</span>
                         </div>`
                     ).join('')}
                 </div>`
                 : '';
 
-            return `<div class="task-item ${task.status}">
-                <div class="task-header">
-                    <h3>${task.title}</h3>
-                    <span class="task-status">${task.status}</span>
+            const priorityClass = getPriorityClass(task.priority);
+            const statusClass = getStatusClass(task.status);
+            const priorityLabel = getPriorityLabel(task.priority);
+            
+            return `
+                <div class="task-card ${priorityClass}" data-task-id="${task.id}">
+                    <div class="task-header">
+                        <h3 class="task-title">${sanitizeForWebview(task.title)}</h3>
+                        <div class="task-badges">
+                            <span class="badge priority-badge ${priorityClass}">${priorityLabel}</span>
+                            <span class="badge status-badge ${statusClass}">${getStatusLabel(task.status)}</span>
+                        </div>
+                    </div>
+                    ${task.description ? `<p class="task-description">${sanitizeForWebview(task.description)}</p>` : ''}
+                    <div class="task-details">
+                        <div class="task-criteria">
+                            <div class="criterion">
+                                <span class="criterion-label">Complexidade:</span>
+                                <span class="criterion-value">${task.priorityCriteria.complexity}/5</span>
+                            </div>
+                            <div class="criterion">
+                                <span class="criterion-label">Impacto:</span>
+                                <span class="criterion-value">${task.priorityCriteria.impact}/5</span>
+                            </div>
+                            <div class="criterion">
+                                <span class="criterion-label">Tempo Estimado:</span>
+                                <span class="criterion-value">${task.priorityCriteria.estimatedTime} min</span>
+                            </div>
+                            ${task.priorityCriteria.deadline ? `
+                                <div class="criterion">
+                                    <span class="criterion-label">Prazo:</span>
+                                    <span class="criterion-value">${formatDate(task.priorityCriteria.deadline)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="task-actions">
+                            <button class="action-button" onclick="completeTask(${task.id})">
+                                <span class="codicon codicon-check"></span> Concluir
+                            </button>
+                            <button class="action-button" onclick="decomposeTask(${task.id})">
+                                <span class="codicon codicon-split-horizontal"></span> Decompor
+                            </button>
+                            <button class="action-button" onclick="deleteTask(${task.id})">
+                                <span class="codicon codicon-trash"></span> Excluir
+                            </button>
+                        </div>
+                    </div>
+                    ${task.subtasks.length > 0 ? `
+                        <div class="subtasks-container">
+                            <h4>Subtarefas (${task.subtasks.filter(st => st.status === TaskStatus.COMPLETED).length}/${task.subtasks.length})</h4>
+                            <div class="subtasks-list">
+                                ${task.subtasks.map(subtask => `
+                                    <div class="subtask-item ${subtask.status === TaskStatus.COMPLETED ? 'completed' : ''}">
+                                        <input type="checkbox" 
+                                            ${subtask.status === TaskStatus.COMPLETED ? 'checked' : ''}
+                                            onchange="toggleSubtask(${task.id}, ${subtask.id})">
+                                        <span class="subtask-title">${sanitizeForWebview(subtask.title)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
-                <p class="task-description">${task.description || ''}</p>
-                ${subtasksHtml}
-            </div>`;
+            `;
         }).join('');
 
         return `
@@ -278,6 +336,99 @@ export class DashboardView {
                         white-space: nowrap;
                     }
 
+                    .task-card {
+                        background: var(--vscode-editor-background);
+                        border: 1px solid var(--vscode-panel-border);
+                        border-radius: 6px;
+                        padding: 16px;
+                        margin-bottom: 16px;
+                        transition: all 0.3s ease;
+                    }
+
+                    .task-card:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                    }
+
+                    .priority-urgent {
+                        border-left: 4px solid #ff4d4d;
+                    }
+
+                    .priority-high {
+                        border-left: 4px solid #ffa64d;
+                    }
+
+                    .priority-medium {
+                        border-left: 4px solid #4d94ff;
+                    }
+
+                    .priority-low {
+                        border-left: 4px solid #4dff4d;
+                    }
+
+                    .task-badges {
+                        display: flex;
+                        gap: 8px;
+                    }
+
+                    .badge {
+                        padding: 4px 8px;
+                        border-radius: 12px;
+                        font-size: 12px;
+                        font-weight: 500;
+                    }
+
+                    .priority-badge {
+                        background: var(--vscode-badge-background);
+                        color: var(--vscode-badge-foreground);
+                    }
+
+                    .priority-urgent .priority-badge {
+                        background: #ff4d4d;
+                        color: white;
+                    }
+
+                    .priority-high .priority-badge {
+                        background: #ffa64d;
+                        color: white;
+                    }
+
+                    .priority-medium .priority-badge {
+                        background: #4d94ff;
+                        color: white;
+                    }
+
+                    .priority-low .priority-badge {
+                        background: #4dff4d;
+                        color: #1a1a1a;
+                    }
+
+                    .task-criteria {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                        gap: 12px;
+                        margin: 12px 0;
+                        padding: 12px;
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        border-radius: 4px;
+                    }
+
+                    .criterion {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 4px;
+                    }
+
+                    .criterion-label {
+                        font-size: 12px;
+                        color: var(--vscode-descriptionForeground);
+                    }
+
+                    .criterion-value {
+                        font-weight: 500;
+                        color: var(--vscode-foreground);
+                    }
+
                     @media (max-width: 480px) {
                         .header {
                             flex-direction: column;
@@ -384,19 +535,59 @@ export class DashboardView {
                                 ? \`<div class="subtasks">
                                     \${task.subtasks.map(subtask => 
                                         \`<div class="subtask \${subtask.completed ? 'completed' : ''}">
-                                            <span class="subtask-title">\${subtask.title}</span>
+                                            <span class="subtask-title">\${sanitizeForWebview(subtask.title)}</span>
                                             <span class="subtask-time">\${formatTime(subtask.estimatedMinutes)}</span>
                                         </div>\`
                                     ).join('')}
                                 </div>\`
                                 : '';
 
-                            return \`<div class="task-item \${task.status}">
+                            const priorityClass = getPriorityClass(task.priority);
+                            const statusClass = getStatusClass(task.status);
+                            const priorityLabel = getPriorityLabel(task.priority);
+                            
+                            return \`<div class="task-card \${priorityClass}" data-task-id="\${task.id}">
                                 <div class="task-header">
-                                    <h3>\${task.title}</h3>
-                                    <span class="task-status">\${task.status}</span>
+                                    <h3 class="task-title">\${sanitizeForWebview(task.title)}</h3>
+                                    <div class="task-badges">
+                                        <span class="badge priority-badge \${priorityClass}">\${priorityLabel}</span>
+                                        <span class="badge status-badge \${statusClass}">\${getStatusLabel(task.status)}</span>
+                                    </div>
                                 </div>
-                                <p class="task-description">\${task.description || ''}</p>
+                                \${task.description ? \`<p class="task-description">\${sanitizeForWebview(task.description)}</p>\` : ''}
+                                <div class="task-details">
+                                    <div class="task-criteria">
+                                        <div class="criterion">
+                                            <span class="criterion-label">Complexidade:</span>
+                                            <span class="criterion-value">\${task.priorityCriteria.complexity}/5</span>
+                                        </div>
+                                        <div class="criterion">
+                                            <span class="criterion-label">Impacto:</span>
+                                            <span class="criterion-value">\${task.priorityCriteria.impact}/5</span>
+                                        </div>
+                                        <div class="criterion">
+                                            <span class="criterion-label">Tempo Estimado:</span>
+                                            <span class="criterion-value">\${task.priorityCriteria.estimatedTime} min</span>
+                                        </div>
+                                        \${task.priorityCriteria.deadline ? \`
+                                            <div class="criterion">
+                                                <span class="criterion-label">Prazo:</span>
+                                                <span class="criterion-value">\${formatDate(task.priorityCriteria.deadline)}</span>
+                                            </div>
+                                        \` : ''}
+                                    </div>
+                                    <div class="task-actions">
+                                        <button class="action-button" onclick="completeTask(\${task.id})">
+                                            <span class="codicon codicon-check"></span> Concluir
+                                        </button>
+                                        <button class="action-button" onclick="decomposeTask(\${task.id})">
+                                            <span class="codicon codicon-split-horizontal"></span> Decompor
+                                        </button>
+                                        <button class="action-button" onclick="deleteTask(\${task.id})">
+                                            <span class="codicon codicon-trash"></span> Excluir
+                                        </button>
+                                    </div>
+                                </div>
                                 \${subtasksHtml}
                             </div>\`;
                         }).join('');
@@ -480,5 +671,69 @@ export class DashboardView {
     ): void {
         this.panel = webviewView;
         webviewView.webview.html = this.getWebviewContent();
+    }
+}
+
+function getPriorityClass(priority: TaskPriority): string {
+    switch (priority) {
+        case TaskPriority.URGENT:
+            return 'priority-urgent';
+        case TaskPriority.HIGH:
+            return 'priority-high';
+        case TaskPriority.MEDIUM:
+            return 'priority-medium';
+        case TaskPriority.LOW:
+            return 'priority-low';
+        default:
+            return '';
+    }
+}
+
+function getPriorityLabel(priority: TaskPriority): string {
+    switch (priority) {
+        case TaskPriority.URGENT:
+            return 'Urgente';
+        case TaskPriority.HIGH:
+            return 'Alta';
+        case TaskPriority.MEDIUM:
+            return 'Média';
+        case TaskPriority.LOW:
+            return 'Baixa';
+        default:
+            return 'Não definida';
+    }
+}
+
+function formatDate(date: Date): string {
+    return new Date(date).toLocaleDateString('pt-BR');
+}
+
+function getStatusClass(status: TaskStatus): string {
+    switch (status) {
+        case TaskStatus.COMPLETED:
+            return 'status-completed';
+        case TaskStatus.IN_PROGRESS:
+            return 'status-in-progress';
+        case TaskStatus.NOT_STARTED:
+            return 'status-not-started';
+        case TaskStatus.PAUSED:
+            return 'status-paused';
+        default:
+            return '';
+    }
+}
+
+function getStatusLabel(status: TaskStatus): string {
+    switch (status) {
+        case TaskStatus.COMPLETED:
+            return 'Concluída';
+        case TaskStatus.IN_PROGRESS:
+            return 'Em progresso';
+        case TaskStatus.NOT_STARTED:
+            return 'Não iniciada';
+        case TaskStatus.PAUSED:
+            return 'Pausada';
+        default:
+            return 'Status desconhecido';
     }
 } 
