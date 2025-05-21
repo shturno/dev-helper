@@ -3,6 +3,7 @@ out/
 dist/
 coverage/
 node_modules/
+src/__mocks__/
 
 # Arquivos de definição de tipos
 *.d.ts
