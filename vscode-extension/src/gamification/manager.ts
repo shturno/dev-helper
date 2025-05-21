@@ -103,46 +103,6 @@ export class GamificationManager {
         }
     }
 
-    private async loadAchievements(): Promise<void> {
-        try {
-            const savedAchievements = this.context.globalState.get<Achievement[]>('dev-helper-achievements');
-            if (savedAchievements) {
-                this.achievements = savedAchievements;
-            } else {
-                this.initializeAchievements();
-                await this.saveAchievements();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar conquistas:', error);
-            vscode.window.showErrorMessage('Erro ao carregar conquistas');
-            this.initializeAchievements();
-        }
-    }
-
-    private async saveAchievements(): Promise<void> {
-        try {
-            await this.context.globalState.update('dev-helper-achievements', this.achievements);
-        } catch (error) {
-            console.error('Erro ao salvar conquistas:', error);
-            vscode.window.showErrorMessage('Erro ao salvar conquistas');
-        }
-    }
-
-    private initializeUserData(): void {
-        // Inicializar com dados padrão
-        this.currentUserData = {
-            level: 1,
-            xp_points: 0,
-            xp_for_next_level: 100,
-            title: 'Iniciante',
-            streak: 0,
-            totalFocusTime: 0,
-            totalTasks: 0,
-            totalSubtasks: 0,
-            totalFocusSessions: 0
-        };
-    }
-
     private initializeAchievements(): void {
         this.achievements = [
             // Conquistas de Tarefas
@@ -385,7 +345,6 @@ export class GamificationManager {
         if (achievement && !achievement.unlockedAt) {
             achievement.unlockedAt = Date.now();
             await this.addXP(achievement.xpReward);
-            await this.saveAchievements();
             vscode.window.showInformationMessage(
                 `🏆 Conquista Desbloqueada: ${achievement.title}! +${achievement.xpReward} XP`
             );

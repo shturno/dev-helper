@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { Task as ApiTask, Subtask as ApiSubtask } from './types';
-import { TaskStatus } from '../tasks/tracker';
+import { TaskStatus } from '../tasks/types';
 import { Task, Subtask, TaskUpdateData } from '../tasks/types';
 
 export interface UserData {

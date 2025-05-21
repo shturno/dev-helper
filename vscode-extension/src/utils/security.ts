@@ -3,7 +3,7 @@
  */
 
 import sanitizeHtmlLib from 'sanitize-html';
-import { TaskStatus } from '../tasks/tracker';
+import { TaskStatus } from '../tasks/types';
 import { Task, Subtask } from '../tasks/types';
 
 interface SecurityConfig {
@@ -106,13 +106,13 @@ export function isValidSubtask(subtask: unknown): subtask is Subtask {
     const s = subtask as Subtask;
     return (
         typeof s.id === 'number' &&
-        typeof s.taskId === 'number' &&
         typeof s.title === 'string' &&
         s.title.length > 0 &&
         typeof s.estimatedMinutes === 'number' &&
         s.estimatedMinutes >= 0 &&
         s.estimatedMinutes <= 480 &&
-        typeof s.completed === 'boolean'
+        typeof s.status === 'string' &&
+        s.status === TaskStatus.COMPLETED
     );
 }
 

@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { Task, TaskPriority, PriorityCriteria } from './types';
 
 export class PriorityManager {

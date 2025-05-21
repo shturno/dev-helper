@@ -1,18 +1,34 @@
-import { TaskStatus } from './tracker';
+export enum TaskStatus {
+    PENDING = 'pending',
+    IN_PROGRESS = 'in_progress',
+    COMPLETED = 'completed',
+    NOT_STARTED = 'not_started',
+    PAUSED = 'paused'
+}
 
 export enum TaskPriority {
-    LOW = 'LOW',
-    MEDIUM = 'MEDIUM',
-    HIGH = 'HIGH',
-    URGENT = 'URGENT'
+    LOW = 'low',
+    MEDIUM = 'medium',
+    HIGH = 'high',
+    URGENT = 'urgent'
 }
 
 export interface PriorityCriteria {
+    complexity: number;
+    impact: number;
+    estimatedTime: number;
     deadline?: Date;
-    complexity: number; // 1-5
-    impact: number; // 1-5
-    dependencies: string[]; // IDs das tarefas dependentes
-    estimatedTime: number; // em minutos
+    dependencies: string[];
+}
+
+export interface Subtask {
+    id: number;
+    title: string;
+    description?: string;
+    estimatedMinutes: number;
+    status: TaskStatus;
+    startedAt?: Date;
+    completedAt?: Date;
 }
 
 export interface Task {
@@ -26,15 +42,6 @@ export interface Task {
     subtasks: Subtask[];
     createdAt: Date;
     updatedAt: Date;
-    completedAt?: Date;
-}
-
-export interface Subtask {
-    id: number;
-    title: string;
-    description?: string;
-    status: TaskStatus;
-    estimatedMinutes: number;
     completedAt?: Date;
 }
 

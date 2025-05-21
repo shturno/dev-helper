@@ -5,6 +5,7 @@ import { HyperfocusManager } from './hyperfocus/manager';
 import { NotificationBlocker } from './notifications/blocker';
 import { DashboardView } from './views/dashboard';
 import { GamificationManager } from './gamification/manager';
+import { TaskPriority } from './tasks/types';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
@@ -21,7 +22,11 @@ const COMMANDS = {
     showDashboard: 'dev-helper.showDashboard',
     createTask: 'dev-helper.createTask',
     decomposeTask: 'dev-helper.decomposeTask',
-    showBlockedNotifications: 'dev-helper.showBlockedNotifications'
+    showBlockedNotifications: 'dev-helper.showBlockedNotifications',
+    moveTaskUp: 'dev-helper.moveTaskUp',
+    moveTaskDown: 'dev-helper.moveTaskDown',
+    setTaskPriority: 'dev-helper.setTaskPriority',
+    reorderTasks: 'dev-helper.reorderTasks'
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -168,6 +173,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.showBlockedNotifications, async () => {
                 if (notificationBlocker) {
                     notificationBlocker.showBlockedNotifications();
+                }
+            }),
+
+            vscode.commands.registerCommand(COMMANDS.moveTaskUp, async (taskId: number) => {
+                try {
+                    await taskTracker?.moveTaskUp(taskId);
+                    dashboardView?.update();
+                } catch (error) {
+                    console.error('Erro ao mover tarefa para cima:', error);
+                    vscode.window.showErrorMessage('Erro ao mover tarefa');
+                }
+            }),
+
+            vscode.commands.registerCommand(COMMANDS.moveTaskDown, async (taskId: number) => {
+                try {
+                    await taskTracker?.moveTaskDown(taskId);
+                    dashboardView?.update();
+                } catch (error) {
+                    console.error('Erro ao mover tarefa para baixo:', error);
+                    vscode.window.showErrorMessage('Erro ao mover tarefa');
+                }
+            }),
+
+            vscode.commands.registerCommand(COMMANDS.setTaskPriority, async (taskId: number, priority: TaskPriority) => {
+                try {
+                    await taskTracker?.setTaskPriority(taskId, priority);
+                    dashboardView?.update();
+                } catch (error) {
+                    console.error('Erro ao definir prioridade:', error);
+                    vscode.window.showErrorMessage('Erro ao definir prioridade da tarefa');
+                }
+            }),
+
+            vscode.commands.registerCommand(COMMANDS.reorderTasks, async (taskIds: number[]) => {
+                try {
+                    await taskTracker?.reorderTasks(taskIds);
+                    dashboardView?.update();
+                } catch (error) {
+                    console.error('Erro ao reordenar tarefas:', error);
+                    vscode.window.showErrorMessage('Erro ao reordenar tarefas');
                 }
             })
         ];

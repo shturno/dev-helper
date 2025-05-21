@@ -37,17 +37,6 @@ export class DashboardView {
         const productivityStats = this.analysisManager.getStats();
 
         const taskListHtml = tasks.map(task => {
-            const subtasksHtml = task.subtasks.length > 0
-                ? `<div class="subtasks">
-                    ${task.subtasks.map(subtask => 
-                        `<div class="subtask ${subtask.completed ? 'completed' : ''}">
-                            <span class="subtask-title">${sanitizeForWebview(subtask.title)}</span>
-                            <span class="subtask-time">${this.formatTime(subtask.estimatedMinutes)}</span>
-                        </div>`
-                    ).join('')}
-                </div>`
-                : '';
-
             const priorityClass = getPriorityClass(task.priority);
             const statusClass = getStatusClass(task.status);
             const priorityLabel = getPriorityLabel(task.priority);
@@ -452,6 +441,79 @@ export class DashboardView {
                             grid-template-columns: 1fr;
                         }
                     }
+
+                    .task-filters {
+                        display: flex;
+                        gap: 8px;
+                        margin-bottom: 16px;
+                        flex-wrap: wrap;
+                    }
+
+                    .filter-button {
+                        padding: 4px 12px;
+                        border: 1px solid var(--vscode-panel-border);
+                        border-radius: 12px;
+                        background: var(--vscode-editor-background);
+                        color: var(--vscode-foreground);
+                        cursor: pointer;
+                        font-size: 12px;
+                        transition: all 0.2s ease;
+                    }
+
+                    .filter-button.active {
+                        background: var(--vscode-button-background);
+                        color: var(--vscode-button-foreground);
+                        border-color: transparent;
+                    }
+
+                    .task-actions {
+                        display: flex;
+                        gap: 8px;
+                        margin-top: 12px;
+                    }
+
+                    .task-reorder {
+                        display: flex;
+                        gap: 4px;
+                        margin-left: auto;
+                    }
+
+                    .reorder-button {
+                        padding: 4px;
+                        border: none;
+                        background: transparent;
+                        color: var(--vscode-foreground);
+                        cursor: pointer;
+                        opacity: 0.7;
+                        transition: opacity 0.2s ease;
+                    }
+
+                    .reorder-button:hover {
+                        opacity: 1;
+                    }
+
+                    .reorder-button:disabled {
+                        opacity: 0.3;
+                        cursor: not-allowed;
+                    }
+
+                    .priority-select {
+                        padding: 4px 8px;
+                        border: 1px solid var(--vscode-panel-border);
+                        border-radius: 4px;
+                        background: var(--vscode-editor-background);
+                        color: var(--vscode-foreground);
+                        font-size: 12px;
+                    }
+
+                    .task-card.dragging {
+                        opacity: 0.5;
+                        cursor: move;
+                    }
+
+                    .task-card.drag-over {
+                        border-top: 2px solid var(--vscode-button-background);
+                    }
                 </style>
             </head>
             <body>
@@ -511,6 +573,14 @@ export class DashboardView {
                         </div>
                     </div>
 
+                    <div class="task-filters">
+                        <button class="filter-button active" data-priority="all">Todas</button>
+                        <button class="filter-button" data-priority="urgent">Urgentes</button>
+                        <button class="filter-button" data-priority="high">Altas</button>
+                        <button class="filter-button" data-priority="medium">Médias</button>
+                        <button class="filter-button" data-priority="low">Baixas</button>
+                    </div>
+
                     <div class="tasks-section">
                         <h2>Suas Tarefas</h2>
                         <div id="taskList" class="task-list">
@@ -531,17 +601,6 @@ export class DashboardView {
                     function updateTaskList(tasks) {
                         const taskList = document.getElementById('taskList');
                         taskList.innerHTML = tasks.map(task => {
-                            const subtasksHtml = task.subtasks.length > 0
-                                ? \`<div class="subtasks">
-                                    \${task.subtasks.map(subtask => 
-                                        \`<div class="subtask \${subtask.completed ? 'completed' : ''}">
-                                            <span class="subtask-title">\${sanitizeForWebview(subtask.title)}</span>
-                                            <span class="subtask-time">\${formatTime(subtask.estimatedMinutes)}</span>
-                                        </div>\`
-                                    ).join('')}
-                                </div>\`
-                                : '';
-
                             const priorityClass = getPriorityClass(task.priority);
                             const statusClass = getStatusClass(task.status);
                             const priorityLabel = getPriorityLabel(task.priority);
@@ -588,7 +647,6 @@ export class DashboardView {
                                         </button>
                                     </div>
                                 </div>
-                                \${subtasksHtml}
                             </div>\`;
                         }).join('');
                     }
@@ -630,6 +688,90 @@ export class DashboardView {
 
                     document.getElementById('createTask').addEventListener('click', () => {
                         vscode.postMessage({ command: 'createTask' });
+                    });
+
+                    let draggedTask = null;
+
+                    // Funções de reordenação
+                    function moveTaskUp(taskId) {
+                        vscode.postMessage({ command: 'moveTaskUp', taskId });
+                    }
+
+                    function moveTaskDown(taskId) {
+                        vscode.postMessage({ command: 'moveTaskDown', taskId });
+                    }
+
+                    function setTaskPriority(taskId, priority) {
+                        vscode.postMessage({ command: 'setTaskPriority', taskId, priority });
+                    }
+
+                    // Drag and Drop
+                    document.querySelectorAll('.task-card').forEach(card => {
+                        card.addEventListener('dragstart', e => {
+                            draggedTask = card;
+                            card.classList.add('dragging');
+                        });
+
+                        card.addEventListener('dragend', () => {
+                            draggedTask.classList.remove('dragging');
+                            draggedTask = null;
+                        });
+
+                        card.addEventListener('dragover', e => {
+                            e.preventDefault();
+                            const taskCard = e.target.closest('.task-card');
+                            if (taskCard && taskCard !== draggedTask) {
+                                taskCard.classList.add('drag-over');
+                            }
+                        });
+
+                        card.addEventListener('dragleave', e => {
+                            const taskCard = e.target.closest('.task-card');
+                            if (taskCard) {
+                                taskCard.classList.remove('drag-over');
+                            }
+                        });
+
+                        card.addEventListener('drop', e => {
+                            e.preventDefault();
+                            const taskCard = e.target.closest('.task-card');
+                            if (taskCard && draggedTask) {
+                                const taskList = document.getElementById('taskList');
+                                const tasks = Array.from(taskList.children);
+                                const draggedIndex = tasks.indexOf(draggedTask);
+                                const dropIndex = tasks.indexOf(taskCard);
+
+                                if (draggedIndex !== dropIndex) {
+                                    const taskIds = tasks.map(t => parseInt(t.dataset.taskId));
+                                    vscode.postMessage({ 
+                                        command: 'reorderTasks', 
+                                        taskIds 
+                                    });
+                                }
+                            }
+                            taskCard.classList.remove('drag-over');
+                        });
+                    });
+
+                    // Filtros
+                    document.querySelectorAll('.filter-button').forEach(button => {
+                        button.addEventListener('click', () => {
+                            // Atualizar botões ativos
+                            document.querySelectorAll('.filter-button').forEach(b => 
+                                b.classList.remove('active'));
+                            button.classList.add('active');
+
+                            // Filtrar tarefas
+                            const priority = button.dataset.priority;
+                            const tasks = document.querySelectorAll('.task-card');
+                            tasks.forEach(task => {
+                                if (priority === 'all' || task.classList.contains(\`priority-\${priority}\`)) {
+                                    task.style.display = '';
+                                } else {
+                                    task.style.display = 'none';
+                                }
+                            });
+                        });
                     });
                 </script>
             </body>

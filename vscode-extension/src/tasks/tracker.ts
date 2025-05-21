@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { sanitizeHtml, isValidInput, sanitizeTask, sanitizeForWebview } from '../utils/security';
-import { Task, Subtask, TaskValidation, TaskPriority, PriorityCriteria } from './types';
+import { Task, Subtask, TaskValidation, TaskPriority, TaskStatus } from './types';
 import { GamificationManager, UserData } from '../gamification/manager';
 import { PriorityManager } from './priority-manager';
+import { PrioritySuggestionManager } from './priority-suggestions';
 
 // Constantes de validação
 const MAX_TITLE_LENGTH = 100;
@@ -10,13 +11,6 @@ const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_SUBTASKS_PER_TASK = 20;
 const MAX_ESTIMATED_MINUTES = 480;
 const DEFAULT_XP_REWARD = 10;
-
-// Enum para status das tarefas
-export enum TaskStatus {
-    PENDING = 'pending',
-    IN_PROGRESS = 'in_progress',
-    COMPLETED = 'completed'
-}
 
 export class TaskTracker {
     private static instance: TaskTracker;
@@ -27,6 +21,8 @@ export class TaskTracker {
     private tasks: Task[] = [];
     private gamificationManager: GamificationManager | null = null;
     private priorityManager: PriorityManager;
+    private prioritySuggestionManager: PrioritySuggestionManager;
+    private urgentTaskCheckInterval: NodeJS.Timeout | null = null;
 
     private constructor(private context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
@@ -38,10 +34,12 @@ export class TaskTracker {
         // Inicializar gerenciadores
         this.gamificationManager = GamificationManager.getInstance(context);
         this.priorityManager = PriorityManager.getInstance();
+        this.prioritySuggestionManager = PrioritySuggestionManager.getInstance();
         
         // Carregar tarefas salvas
         this.loadTasks();
         this.initialize();
+        this.startUrgentTaskChecker();
     }
 
     public static getInstance(context?: vscode.ExtensionContext): TaskTracker {
@@ -87,13 +85,12 @@ export class TaskTracker {
         const s = subtask as Subtask;
         return (
             typeof s.id === 'number' &&
-            typeof s.taskId === 'number' &&
             typeof s.title === 'string' &&
             s.title.length > 0 &&
             typeof s.estimatedMinutes === 'number' &&
             s.estimatedMinutes >= 0 &&
             s.estimatedMinutes <= MAX_ESTIMATED_MINUTES &&
-            typeof s.completed === 'boolean'
+            Object.values(TaskStatus).includes(s.status)
         );
     }
 
@@ -185,6 +182,9 @@ export class TaskTracker {
     }
 
     public dispose(): void {
+        if (this.urgentTaskCheckInterval) {
+            clearInterval(this.urgentTaskCheckInterval);
+        }
         this.disposables.forEach(d => d.dispose());
         this.statusBarItem.dispose();
         if (this.webviewPanel) {
@@ -319,13 +319,32 @@ export class TaskTracker {
                 deadline
             );
 
-            // Criar nova tarefa
+            // Obter sugestão de prioridade
+            const suggestion = this.prioritySuggestionManager.getPrioritySuggestion(priorityCriteria);
+            
+            // Mostrar sugestão ao usuário
+            const priorityOptions = [
+                { label: `Sugerido: ${suggestion.suggestedPriority} (${Math.round(suggestion.confidence * 100)}% confiança)`, priority: suggestion.suggestedPriority },
+                { label: 'Urgente', priority: TaskPriority.URGENT },
+                { label: 'Alta', priority: TaskPriority.HIGH },
+                { label: 'Média', priority: TaskPriority.MEDIUM },
+                { label: 'Baixa', priority: TaskPriority.LOW }
+            ];
+
+            const selectedPriority = await vscode.window.showQuickPick(priorityOptions, {
+                placeHolder: 'Selecione a prioridade da tarefa',
+                ignoreFocusOut: true
+            });
+
+            if (!selectedPriority) return;
+
+            // Criar nova tarefa com a prioridade selecionada
             const newTask: Task = {
                 id: Date.now(),
                 title: sanitizeHtml(title),
                 description: description ? sanitizeHtml(description) : '',
                 status: TaskStatus.PENDING,
-                priority: TaskPriority.MEDIUM, // Será atualizado pelo PriorityManager
+                priority: selectedPriority.priority,
                 priorityCriteria,
                 xpReward: DEFAULT_XP_REWARD,
                 subtasks: [],
@@ -360,6 +379,14 @@ export class TaskTracker {
             vscode.window.showInformationMessage(
                 `Tarefa "${newTask.title}" criada com sucesso! Prioridade: ${newTask.priority}`
             );
+
+            // Se a sugestão tiver alta confiança, mostrar as razões
+            if (suggestion.confidence >= 0.7 && suggestion.reasons.length > 0) {
+                vscode.window.showInformationMessage(
+                    `Sugestão de prioridade baseada em:\n${suggestion.reasons.join('\n')}`,
+                    'OK'
+                );
+            }
 
             // Perguntar se deseja decompor a tarefa
             const shouldDecompose = await vscode.window.showQuickPick(['Sim', 'Não'], {
@@ -445,10 +472,9 @@ export class TaskTracker {
                 // Criar nova subtarefa
                 const newSubtask: Subtask = {
                     id: Date.now(),
-                    taskId: task.id,
                     title: sanitizeHtml(title),
                     estimatedMinutes,
-                    completed: false
+                    status: TaskStatus.NOT_STARTED
                 };
 
                 // Validar subtarefa antes de adicionar
@@ -518,15 +544,23 @@ export class TaskTracker {
 
         const subtask = this.currentTask.subtasks.find(s => s.id === subtaskId);
         if (subtask) {
-            subtask.completed = true;
+            const startTime = subtask.startedAt || new Date();
+            const actualTimeSpent = Math.round((new Date().getTime() - startTime.getTime()) / (1000 * 60));
+            
+            subtask.status = TaskStatus.COMPLETED;
+            subtask.completedAt = new Date();
             this.updateStatusBar();
             this.showTaskDetails();
 
             // Verificar se todas as subtarefas foram concluídas
-            const allCompleted = this.currentTask.subtasks.every(s => s.completed);
+            const allCompleted = this.currentTask.subtasks.every(s => s.status === TaskStatus.COMPLETED);
             if (allCompleted) {
                 this.currentTask.status = TaskStatus.COMPLETED;
+                this.currentTask.completedAt = new Date();
                 
+                // Adicionar ao histórico de tarefas
+                this.prioritySuggestionManager.addToHistory(this.currentTask, actualTimeSpent);
+
                 // Notificar o sistema de gamificação
                 if (this.gamificationManager) {
                     // Atualizar estatísticas
@@ -555,7 +589,7 @@ export class TaskTracker {
             return;
         }
 
-        const completedSubtasks = this.currentTask.subtasks.filter(s => s.completed).length;
+        const completedSubtasks = this.currentTask.subtasks.filter(s => s.status === TaskStatus.COMPLETED).length;
         const totalSubtasks = this.currentTask.subtasks.length;
         const progress = totalSubtasks > 0 
             ? Math.round((completedSubtasks / totalSubtasks) * 100) 
@@ -566,7 +600,7 @@ export class TaskTracker {
     }
 
     private getTaskDetailsContent(task: Task): string {
-        const completedSubtasks = task.subtasks.filter(s => s.completed).length;
+        const completedSubtasks = task.subtasks.filter(s => s.status === TaskStatus.COMPLETED).length;
         const totalSubtasks = task.subtasks.length;
         const progress = totalSubtasks > 0 
             ? Math.round((completedSubtasks / totalSubtasks) * 100) 
@@ -671,10 +705,10 @@ export class TaskTracker {
                         <li class="subtask-item">
                             <input type="checkbox" 
                                    class="subtask-checkbox" 
-                                   ${subtask.completed ? 'checked' : ''}
-                                   ${subtask.completed ? 'disabled' : ''}
+                                   ${subtask.status === TaskStatus.COMPLETED ? 'checked' : ''}
+                                   ${subtask.status === TaskStatus.COMPLETED ? 'disabled' : ''}
                                    onchange="completeSubtask(${subtask.id})">
-                            <div class="subtask-info ${subtask.completed ? 'subtask-completed' : ''}">
+                            <div class="subtask-info ${subtask.status === TaskStatus.COMPLETED ? 'subtask-completed' : ''}">
                                 <h3 class="subtask-title">${subtask.title}</h3>
                                 <div class="subtask-time">${subtask.estimatedMinutes} minutos</div>
                             </div>
@@ -721,5 +755,76 @@ export class TaskTracker {
     public getTasks(): Task[] {
         // Retornar tarefas ordenadas por prioridade
         return this.priorityManager.sortTasksByPriority([...this.tasks]);
+    }
+
+    public async moveTaskUp(taskId: number): Promise<void> {
+        const index = this.tasks.findIndex(t => t.id === taskId);
+        if (index > 0) {
+            [this.tasks[index], this.tasks[index - 1]] = [this.tasks[index - 1], this.tasks[index]];
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    public async moveTaskDown(taskId: number): Promise<void> {
+        const index = this.tasks.findIndex(t => t.id === taskId);
+        if (index < this.tasks.length - 1) {
+            [this.tasks[index], this.tasks[index + 1]] = [this.tasks[index + 1], this.tasks[index]];
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    public async setTaskPriority(taskId: number, priority: TaskPriority): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (task) {
+            task.priority = priority;
+            task.updatedAt = new Date();
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    public async reorderTasks(taskIds: number[]): Promise<void> {
+        // Criar um mapa de índice para cada ID de tarefa
+        const taskMap = new Map(this.tasks.map((task, index) => [task.id, index]));
+        
+        // Reordenar as tarefas de acordo com a nova ordem
+        const newTasks = taskIds.map(id => this.tasks[taskMap.get(id)!]);
+        
+        // Atualizar a lista de tarefas
+        this.tasks = newTasks;
+        await this.saveTasks();
+        this.updateDashboard();
+    }
+
+    private startUrgentTaskChecker(): void {
+        // Verificar tarefas urgentes a cada 30 minutos
+        this.urgentTaskCheckInterval = setInterval(() => {
+            this.checkUrgentTasks();
+        }, 30 * 60 * 1000);
+
+        // Verificar imediatamente ao iniciar
+        this.checkUrgentTasks();
+    }
+
+    private async checkUrgentTasks(): Promise<void> {
+        const urgentTasks = this.prioritySuggestionManager.getUrgentTasks(this.tasks);
+        
+        if (urgentTasks.length > 0) {
+            const message = urgentTasks.length === 1
+                ? `Você tem uma tarefa urgente: "${urgentTasks[0].title}"`
+                : `Você tem ${urgentTasks.length} tarefas urgentes que precisam de atenção`;
+
+            const action = await vscode.window.showWarningMessage(
+                message,
+                'Ver Tarefas',
+                'Ignorar'
+            );
+
+            if (action === 'Ver Tarefas') {
+                vscode.commands.executeCommand('dev-helper.showDashboard');
+            }
+        }
     }
 } 
