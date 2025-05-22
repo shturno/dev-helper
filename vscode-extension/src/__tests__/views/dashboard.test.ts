@@ -175,7 +175,12 @@ describe('DashboardView', () => {
                         focusTime: expect.any(Number),
                         streak: expect.any(Number),
                         tasksCompleted: expect.any(Number),
-                        completionRate: expect.any(Number)
+                        completionRate: expect.any(Number),
+                        mostProductiveHour: expect.anything(), 
+                        bestDay: expect.anything(),           
+                        avgTaskDuration: expect.any(Number),
+                        totalFocusTime: expect.any(Number),
+                        insights: expect.any(Array)
                     })
                 })
             );

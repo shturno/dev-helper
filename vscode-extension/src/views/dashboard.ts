@@ -232,227 +232,450 @@ export class DashboardView implements vscode.WebviewViewProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dev Helper Dashboard</title>
   <link rel="stylesheet" href="https://microsoft.github.io/vscode-codicons/dist/codicon.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --radius: 8px;
+      --radius: 6px; /* Slightly reduced radius for a sharper look */
       --card-bg: var(--vscode-sideBar-background);
       --card-border: var(--vscode-panel-border);
-      --card-shadow: 0 2px 8px 0 var(--vscode-widget-shadow,rgba(0,0,0,0.08));
-      --primary: var(--vscode-editor-selectionBackground);
-      --primary-fg: var(--vscode-editor-foreground);
+      /* Softer shadow for a more modern feel */
+      --card-shadow: 0 1px 3px var(--vscode-widget-shadow, rgba(0,0,0,0.1)), 0 1px 2px var(--vscode-widget-shadow, rgba(0,0,0,0.06));
+      --card-shadow-hover: 0 4px 12px var(--vscode-widget-shadow, rgba(0,0,0,0.12)), 0 2px 6px var(--vscode-widget-shadow, rgba(0,0,0,0.08));
+
+      --primary: var(--vscode-button-background, var(--vscode-editor-selectionBackground));
+      --primary-fg: var(--vscode-button-foreground, var(--vscode-editor-foreground));
+      --input-bg: var(--vscode-input-background, var(--vscode-editorWidget-background));
+      --input-border: var(--vscode-input-border, var(--vscode-panel-border));
       --muted: var(--vscode-editor-inactiveSelectionBackground);
       --muted-fg: var(--vscode-descriptionForeground);
-      --accent: var(--vscode-editor-selectionHighlightBackground, #6c63ff);
+      --accent: var(--vscode-editor-selectionHighlightBackground, #6c63ff); /* Keep accent for specific highlights */
+      --text-color: var(--vscode-editor-foreground);
+      --text-muted-color: var(--vscode-descriptionForeground);
+      --border-color: var(--vscode-panel-border);
     }
+
+    *, *::before, *::after {
+        box-sizing: border-box;
+    }
+
     body {
       font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
+      color: var(--text-color);
       background: var(--vscode-editor-background);
       margin: 0;
       padding: 0;
+      line-height: 1.6; /* Improved readability */
     }
+
     main {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 32px 16px 32px 16px;
+      padding: 24px; /* Consistent padding */
       display: flex;
       flex-direction: column;
-      gap: 32px;
+      gap: 28px; /* Consistent gap */
     }
+
     .dashboard-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
+      gap: 10px; /* Slightly reduced gap */
+      margin-bottom: 16px; /* More space after header */
     }
+
     .dashboard-header .codicon {
-      font-size: 2rem;
+      font-size: 1.8rem; /* Slightly smaller icon */
       color: var(--primary);
-      opacity: 0.7;
+      opacity: 0.85; /* More visible */
     }
+
     .dashboard-title {
-      font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: -1px;
-      color: var(--primary-fg);
+      font-size: 1.8rem; /* Adjusted size */
+      font-weight: 600; /* Less aggressive weight */
+      letter-spacing: -0.5px; /* Softer letter spacing */
+      color: var(--text-color);
     }
+
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Slightly smaller minmax */
+      gap: 16px; /* Reduced gap */
     }
+
     .card {
       background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      border: 1px solid var(--border-color);
       border-radius: var(--radius);
       box-shadow: var(--card-shadow);
-      padding: 20px 18px 18px 18px;
+      padding: 16px; /* Adjusted padding */
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      min-height: 110px;
+      gap: 6px; /* Reduced gap inside card */
+      min-height: 120px; /* Adjusted min-height to accommodate charts */
       position: relative;
-      transition: box-shadow 0.2s;
+      transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
     }
+    
+    .card.chart-card { /* Specific class for cards containing charts */
+        padding: 12px; /* Less padding if chart has its own */
+        justify-content: space-between; /* Align title top, chart/desc bottom */
+    }
+
     .card:hover {
-      box-shadow: 0 4px 16px 0 var(--vscode-widget-shadow,rgba(0,0,0,0.14));
+      box-shadow: var(--card-shadow-hover);
+      transform: translateY(-2px); /* Subtle lift effect */
     }
-    .card .codicon {
+    
+    .card.clickable-card:hover {
+        /* More pronounced hover for clickable cards */
+        border-color: var(--accent); 
+        /* background-color: color-mix(in srgb, var(--card-bg) 95%, var(--accent) 5%); */ /* Subtle bg change if desired */
+    }
+    
+    .clickable-card {
+        cursor: pointer;
+    }
+
+    .card .codicon { /* Icon for non-chart cards */
       position: absolute;
-      top: 18px;
-      right: 18px;
-      font-size: 1.5rem;
-      opacity: 0.15;
+      top: 16px;
+      right: 16px;
+      font-size: 1.6rem; /* Adjusted size */
+      opacity: 0.25; /* Slightly more visible but still subtle */
       pointer-events: none;
     }
-    .card-title {
-      margin: 0 0 2px 0;
-      font-size: 1rem;
-      color: var(--muted-fg);
-      font-weight: 500;
-    }
-    .card-value {
+    
+    .card-title { /* Applies to all cards */
       margin: 0;
-      font-size: 2rem;
-      font-weight: bold;
-      color: var(--primary-fg);
+      font-size: 0.9rem; /* Slightly smaller */
+      color: var(--text-muted-color);
+      font-weight: 500;
+      line-height: 1.4;
     }
-    .card-desc {
-      color: var(--muted-fg);
-      font-size: 0.95em;
+
+    .card-value { /* For non-chart cards */
+      margin: 0;
+      font-size: 1.8rem; /* Slightly smaller for balance */
+      font-weight: 600; /* Less aggressive than bold */
+      color: var(--text-color);
+      line-height: 1.2;
     }
+
+    .card-desc { /* For non-chart cards and general descriptions */
+      color: var(--text-muted-color);
+      font-size: 0.85rem; /* Slightly smaller */
+      line-height: 1.4;
+    }
+
+    .chart-container {
+        flex-grow: 1;
+        position: relative; /* For canvas absolute positioning if needed */
+        display: flex; /* Center canvas */
+        align-items: center; /* Center canvas */
+        justify-content: center; /* Center canvas */
+        margin-top: 8px; /* Space between title and chart */
+        min-height: 80px; /* Ensure space for chart rendering */
+    }
+
+    .chart-container canvas {
+        max-width: 100%;
+        max-height: 100%; /* Ensure canvas is responsive within container */
+    }
+
+
     .section {
-      margin-top: 12px;
-      margin-bottom: 8px;
+      /* margin-top: 12px; removed, using main gap */
+      /* margin-bottom: 8px; removed, using main gap */
     }
+
     .section-title {
-      font-size: 1.2rem;
+      font-size: 1.3rem; /* Slightly larger for better hierarchy */
       font-weight: 600;
-      margin-bottom: 10px;
-      color: var (--primary-fg);
+      margin-bottom: 12px; /* Increased space */
+      color: var(--text-color);
       display: flex;
       align-items: center;
       gap: 8px;
     }
+
     .filters {
       display: flex;
-      gap: 12px;
+      gap: 10px; /* Adjusted gap */
       align-items: center;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 16px; /* More space */
+      padding: 10px; /* Adjusted padding */
+      background-color: var(--vscode-textInput-background, var(--vscode-editorWidget-background)); /* Use more specific var if available */
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
     }
+
     .filters label {
-      font-size: 0.95em;
-      color: var(--muted-fg);
+      font-size: 0.9rem;
+      color: var(--text-muted-color);
+      margin-right: 2px; /* Reduced margin */
     }
+
     .filters select, .filters button {
       border-radius: var(--radius);
-      border: 1px solid var(--card-border);
-      background: var(--card-bg);
-      color: var(--primary-fg);
-      padding: 4px 10px;
-      font-size: 1em;
-      margin-right: 4px;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      color: var(--text-color);
+      padding: 5px 8px; /* Adjusted padding */
+      font-size: 0.9em; /* Adjusted font size */
+      /* margin-right: 4px; Handled by gap in .filters */
     }
+    
+    .filters select:focus, .filters button:focus {
+        outline: 1px solid var(--vscode-focusBorder, var(--primary)); /* VSCode style focus */
+        outline-offset: -1px;
+    }
+
     .filters button {
       background: var(--primary);
       color: var(--primary-fg);
-      border: none;
+      border: 1px solid transparent; /* Adding border for consistency, transparent for primary */
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px; /* Icon-text gap */
       font-weight: 500;
-      transition: background 0.2s;
+      transition: background-color 0.2s ease-in-out;
     }
+
     .filters button:hover {
-      background: var(--accent);
+      background: var(--vscode-button-hoverBackground, var(--accent)); /* Use VS Code hover if available */
     }
+    
+    .filters button .codicon {
+        font-size: 1em; /* Adjust icon size in buttons */
+    }
+
     .tag, .category {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 0.95em;
-      margin: 2px 4px 2px 0;
-      color: #fff;
+      display: inline-flex; /* For better alignment if icons were added */
+      align-items: center;
+      padding: 2px 8px; /* Adjusted padding */
+      border-radius: 12px; /* More pill-like */
+      font-size: 0.8rem; /* Smaller font */
+      margin: 2px; /* Simpler margin */
+      color: var(--vscode-button-foreground); /* Ensure contrast, fallback if needed */
       font-weight: 500;
+      line-height: 1.4; /* Added line-height */
+      /* Background color is set inline */
     }
+
     .tag-list, .category-list {
-      margin: 10px 0;
-      padding: 10px;
-      background: var(--card-bg);
-      border-radius: 6px;
-      border: 1px solid var(--card-border);
+      margin: 0; /* Reset margin, handled by grid gap */
+      padding: 12px;
+      background: var(--vscode-editorWidget-background, var(--card-bg)); /* Subtle background */
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 8px; /* Space between header and items */
     }
+    
+    .tag-list h3, .category-list h3 {
+        margin: 0 0 4px 0; /* Adjusted margin */
+        font-size: 1em; /* Base size */
+        font-weight: 600;
+        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 6px; /* Icon and text gap */
+    }
+    .tag-list h3 .codicon, .category-list h3 .codicon {
+        font-size: 1.1em; /* Slightly larger icon */
+    }
+
+
     .tag-item, .category-item {
       display: flex;
       align-items: center;
-      margin: 5px 0;
+      margin-bottom: 4px; /* Spacing between items */
       gap: 8px;
+      padding: 6px; /* Add some padding */
+      border-radius: var(--radius);
+      transition: background-color 0.15s ease-in-out;
     }
+    .tag-item:hover, .category-item:hover {
+        background-color: var(--vscode-list-hoverBackground, var(--muted));
+    }
+    
+    .tag-name, .category-name { /* For bolding the name */
+        font-weight: 600;
+        color: var(--text-color);
+        font-size: 0.9em;
+    }
+    .tag-desc, .category-desc { /* For the description */
+        font-size: 0.85em;
+        margin-left: 2px; /* Align with name after color swatch */
+    }
+
+
     .tag-color, .category-color {
-      width: 16px;
-      height: 16px;
+      width: 14px; /* Slightly smaller */
+      height: 14px;
       border-radius: 50%;
-      margin-right: 4px;
-      border: 1px solid var(--card-border);
+      /* margin-right: 4px; Handled by gap */
+      border: 1px solid var(--border-color);
+      flex-shrink: 0; /* Prevent shrinking */
     }
+
     .task-list {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      margin-top: 8px;
+      gap: 12px; /* Reduced gap */
+      margin-top: 0; /* section-title has margin-bottom */
     }
+
     .task-item {
       background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--card-border);
+      border: 1px solid var(--border-color);
+      border-left: 3px solid var(--border-color); /* Default left border */
       border-radius: var(--radius);
-      padding: 14px 16px 10px 16px;
-      box-shadow: 0 1px 4px 0 var(--vscode-widget-shadow,rgba(0,0,0,0.04));
-      margin-bottom: 2px;
+      padding: 12px 14px; /* Adjusted padding */
+      box-shadow: var(--card-shadow);
+      /* margin-bottom: 2px; Handled by gap in .task-list */
       position: relative;
-      transition: box-shadow 0.2s;
+      transition: box-shadow 0.2s ease-in-out, border-left-color 0.2s ease-in-out; /* Animate border color */
     }
+    
+    .task-item:hover {
+        box-shadow: var(--card-shadow-hover);
+        border-left-color: var(--accent); /* Accent color on hover */
+    }
+
     .task-item.current {
-      border: 2px solid var(--primary);
-      box-shadow: 0 0 0 2px var(--primary);
+      border-left: 3px solid var(--primary); /* Emphasize with a thicker left border */
+      box-shadow: var(--card-shadow-hover); /* Add shadow to current task */
     }
+
     .task-item h3 {
-      margin: 0 0 4px 0;
-      font-size: 1.1rem;
+      margin: 0 0 6px 0; /* Adjusted margin */
+      font-size: 1.05rem; /* Slightly adjusted */
       font-weight: 600;
+      color: var(--text-color);
     }
+
     .task-tags {
-      margin-bottom: 4px;
+      margin-bottom: 8px; /* Increased margin */
+      display: flex; /* Enable wrapping for many tags */
+      flex-wrap: wrap;
+      gap: 6px; /* Increased gap for tags */
     }
+
     .task-info {
-      font-size: 0.95em;
-      color: var(--muted-fg);
-      margin-bottom: 4px;
+      font-size: 0.85rem; /* Slightly smaller */
+      color: var(--text-muted-color);
+      margin-bottom: 8px; /* More space before progress */
+      line-height: 1.5;
     }
+    
+    .task-info span { /* Individual info items */
+        margin-right: 6px; /* Space between items */
+        display: inline-block; /* Ensure proper spacing */
+    }
+    
+    .task-info span:last-child {
+        margin-right: 0;
+    }
+
+
     .task-progress {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-top: 4px;
+      margin-top: 10px; /* Adjusted margin */
     }
+
     .progress-bar {
-      width: 100%;
-      height: 8px;
+      flex-grow: 1; /* Allow progress bar to take available space */
+      height: 6px; /* Thinner bar */
       background: var(--muted);
-      border-radius: 4px;
+      border-radius: 3px; /* Rounded to match height */
       overflow: hidden;
     }
+
     .progress {
       height: 100%;
-      background: linear-gradient(90deg, var(--primary), var(--accent));
-      border-radius: 4px;
+      background: var(--primary); /* Simpler background, can be gradient if preferred */
+      border-radius: 3px;
       transition: width 0.4s cubic-bezier(.4,1.4,.6,1);
     }
-    @media (max-width: 700px) {
-      main { padding: 8px; }
-      .stats-grid { grid-template-columns: 1fr; }
+    
+    .task-progress span { /* Percentage text */
+        font-size: 0.85rem;
+        color: var(--text-muted-color);
+        font-weight: 500;
     }
+    
+    .tag-category-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+
+    @media (max-width: 768px) { /* Adjusted breakpoint */
+      main { 
+        padding: 16px; /* Less padding on smaller screens */
+        gap: 20px; 
+      }
+      .stats-grid { 
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Smaller cards on mobile */
+        gap: 12px;
+      }
+      .dashboard-title {
+        font-size: 1.6rem;
+      }
+      .section-title {
+        font-size: 1.15rem;
+      }
+      .filters {
+        padding: 10px;
+        gap: 8px;
+      }
+      .filters select, .filters button {
+        padding: 5px 8px;
+        font-size: 0.9em;
+      }
+      .task-item h3 {
+        font-size: 1rem;
+      }
+      .tag-category-grid {
+        grid-template-columns: 1fr; /* Stack tag/category lists */
+      }
+    }
+
+    @media (max-width: 480px) {
+        .stats-grid {
+            grid-template-columns: 1fr; /* Single column for very small screens */
+        }
+        .dashboard-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        .dashboard-header .codicon {
+            font-size: 1.6rem;
+        }
+         .dashboard-title {
+            font-size: 1.5rem;
+        }
+        .filters {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .filters label {
+            margin-bottom: 2px; /* Space out labels in column layout */
+        }
+        .filters select, .filters button {
+            width: 100%; /* Full width controls in column layout */
+        }
+    }
+
   </style>
 </head>
 <body>
@@ -464,14 +687,26 @@ export class DashboardView implements vscode.WebviewViewProvider {
 
     <section aria-label="Estatísticas" class="section">
       <div class="stats-grid">
-        <div class="card"><span class="codicon codicon-clock"></span><div class="card-title">Tempo Foco</div><div class="card-value" id="focus-time">0 minutos</div><div class="card-desc">Hoje</div></div>
-        <div class="card"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
-        <div class="card"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
-        <div class="card"><span class="codicon codicon-rocket"></span><div class="card-title">Taxa de Conclusão</div><div class="card-value" id="completion-rate">0%</div></div>
-        <div class="card"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
-        <div class="card"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
-        <div class="card"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
-        <div class="card"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
+        <div class="card chart-card">
+            <div class="card-title"><span class="codicon codicon-clock" style="margin-right: 4px;"></span>Tempo Foco (Hoje)</div>
+            <div class="chart-container">
+                <canvas id="focusTimeChart"></canvas>
+            </div>
+            <div id="focus-time-value" class="card-desc" style="text-align:center; margin-top: 4px;">0 minutos</div>
+        </div>
+        <div class="card clickable-card" data-action="view-streak-details"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
+        <div class="card clickable-card" data-action="view-completed-tasks-details"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
+        <div class="card chart-card">
+            <div class="card-title"><span class="codicon codicon-rocket" style="margin-right: 4px;"></span>Taxa de Conclusão</div>
+            <div class="chart-container">
+                <canvas id="completionRateChart"></canvas>
+            </div>
+            <div id="completion-rate-value" class="card-desc" style="text-align:center; margin-top: 4px;">0%</div>
+        </div>
+        <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
+        <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
+        <div class="card clickable-card" data-action="view-task-duration-details"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
+        <div class="card clickable-card" data-action="view-total-focus-details"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
       </div>
     </section>
 
@@ -505,10 +740,10 @@ export class DashboardView implements vscode.WebviewViewProvider {
               ${task.category ? `<span class="category" style="background-color: ${task.category.color}">${task.category.name}</span>` : ''}
             </div>
             <div class="task-info">
-              <span>Status: ${task.status}</span> &nbsp;|
-              <span>Prioridade: ${task.priorityCriteria.complexity}</span> &nbsp;|
+              <span>Status: ${task.status}</span>
+              <span>Prioridade: ${task.priorityCriteria.complexity}</span>
               <span>Impacto: ${task.priorityCriteria.impact}</span>
-              ${task.priorityCriteria.deadline ? `<span> | Prazo: ${task.priorityCriteria.deadline.toLocaleDateString()}</span>` : ''}
+              ${task.priorityCriteria.deadline ? `<span>Prazo: ${task.priorityCriteria.deadline.toLocaleDateString()}</span>` : ''}
             </div>
             <div class="task-progress">
               <div class="progress-bar"><div class="progress" style="width: ${this.calculateTaskProgress(task)}%"></div></div>
@@ -519,37 +754,95 @@ export class DashboardView implements vscode.WebviewViewProvider {
       </div>
     </section>
 
-    <section aria-label="Tags e Categorias" class="section">
+    <section aria-label="Gestão de Tags e Categorias" class="section">
       <div class="section-title"><span class="codicon codicon-tag"></span> Tags e Categorias</div>
-      <div class="tag-list">
-        <h3 style="margin:0 0 6px 0;font-size:1em;">Tags Disponíveis</h3>
-        ${tags.length === 0 ? '<span class="card-desc">Nenhuma tag cadastrada.</span>' : tags.map(tag => `
-          <div class="tag-item">
-            <div class="tag-color" style="background-color: ${tag.color}"></div>
-            <span class="tag" style="background-color: ${tag.color}">${tag.name}</span>
-            ${tag.description ? `<span class="card-desc">${tag.description}</span>` : ''}
-          </div>
-        `).join('')}
-      </div>
-      <div class="category-list">
-        <h3 style="margin:0 0 6px 0;font-size:1em;">Categorias</h3>
-        ${categories.length === 0 ? '<span class="card-desc">Nenhuma categoria cadastrada.</span>' : categories.map(category => `
-          <div class="category-item">
-            <div class="category-color" style="background-color: ${category.color}"></div>
-            <span class="category" style="background-color: ${category.color}">${category.name}</span>
-            ${category.description ? `<span class="card-desc">${category.description}</span>` : ''}
-          </div>
-        `).join('')}
+      <div class="tag-category-grid">
+        <div class="tag-list">
+          <h3><span class="codicon codicon-tag"></span> Tags Disponíveis</h3>
+          ${tags.length === 0 ? '<p class="card-desc">Nenhuma tag cadastrada.</p>' : tags.map(tag => `
+            <div class="tag-item">
+              <span class="tag-color" style="background-color: ${tag.color}"></span>
+              <strong class="tag-name">${tag.name}</strong>
+              ${tag.description ? `<span class="tag-desc card-desc">${tag.description}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div class="category-list">
+          <h3><span class="codicon codicon-folder"></span> Categorias</h3>
+          ${categories.length === 0 ? '<p class="card-desc">Nenhuma categoria cadastrada.</p>' : categories.map(category => `
+            <div class="category-item">
+              <span class="category-color" style="background-color: ${category.color}"></span>
+              <strong class="category-name">${category.name}</strong>
+              ${category.description ? `<span class="category-desc card-desc">${category.description}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
       </div>
     </section>
   </main>
   <script>
-    const vscode = acquireVsCodeApi();
-    const statusFilter = document.getElementById('filter-status');
-    const tagFilter = document.getElementById('filter-tag');
-    const categoryFilter = document.getElementById('filter-category');
-    const taskList = document.getElementById('task-list');
+    // Single vscodeApi instance
+    const vscodeApi = acquireVsCodeApi();
+
+    // Chart instances
+    let focusTimeChartInstance = null;
+    let completionRateChartInstance = null;
+
+    // Helper to get CSS variable values
+    function getCssVariable(variableName) {
+        return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    }
+    
+    // DOM Elements (cached on DOMContentLoaded)
+    let statusFilter, tagFilter, categoryFilter, taskList, statsGrid, createTaskButton, focusModeButton;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize DOM element variables
+        statusFilter = document.getElementById('filter-status');
+        tagFilter = document.getElementById('filter-tag');
+        categoryFilter = document.getElementById('filter-category');
+        taskList = document.getElementById('task-list');
+        statsGrid = document.querySelector('.stats-grid');
+        createTaskButton = document.getElementById('btn-create-task');
+        focusModeButton = document.getElementById('btn-focus-mode');
+
+        // Event Listeners for filters
+        if (statusFilter) statusFilter.addEventListener('change', filterTasks);
+        if (tagFilter) tagFilter.addEventListener('change', filterTasks);
+        if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
+
+        // Event Listeners for buttons
+        if (createTaskButton) {
+            createTaskButton.onclick = function() {
+                vscodeApi.postMessage({ command: 'createTask' });
+            };
+        }
+        if (focusModeButton) {
+            focusModeButton.onclick = function() {
+                vscodeApi.postMessage({ command: 'startFocus' });
+            };
+        }
+
+        // Event listener for clickable cards (delegated to statsGrid)
+        if (statsGrid) {
+            statsGrid.addEventListener('click', function(event) {
+                const card = event.target.closest('.clickable-card');
+                if (card && card.dataset.action) {
+                    const action = card.dataset.action;
+                    console.log('Card clicked:', action);
+                    vscodeApi.postMessage({
+                        command: 'dashboardCardClicked',
+                        action: action
+                    });
+                }
+            });
+        }
+    });
+
     function filterTasks() {
+      // Ensure elements are available before trying to read their values
+      if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
+
       const status = statusFilter.value;
       const tag = tagFilter.value;
       const category = categoryFilter.value;
@@ -564,49 +857,181 @@ export class DashboardView implements vscode.WebviewViewProvider {
         el.style.display = show ? '' : 'none';
       });
     }
-    statusFilter.addEventListener('change', filterTasks);
-    tagFilter.addEventListener('change', filterTasks);
-    categoryFilter.addEventListener('change', filterTasks);
-    document.getElementById('btn-create-task').onclick = function() {
-      vscode.postMessage({ command: 'createTask' });
-    };
-    document.getElementById('btn-focus-mode').onclick = function() {
-      vscode.postMessage({ command: 'startFocus' });
-    };
+    
     window.addEventListener('message', function(event) {
       var message = event.data;
       switch (message.type) {
         case 'update':
           if (message.stats) {
             var stats = message.stats;
-            var elements = {
-              focusTime: document.getElementById('focus-time'),
+            // Elements for dynamic text updates - these are fine to query here as they are within the update scope
+            var elementsToUpdate = {
               streak: document.getElementById('streak'),
               tasksCompleted: document.getElementById('tasks-completed'),
-              completionRate: document.getElementById('completion-rate'),
               mostProductiveHour: document.getElementById('most-productive-hour'),
               bestDay: document.getElementById('best-day'),
               avgTaskDuration: document.getElementById('avg-task-duration'),
-              totalFocusTime: document.getElementById('total-focus-time')
+              totalFocusTime: document.getElementById('total-focus-time'),
+              focusTimeValueDisplay: document.getElementById('focus-time-value'),
+              completionRateValueDisplay: document.getElementById('completion-rate-value')
             };
-            if (elements.focusTime) elements.focusTime.textContent = stats.focusTime + ' minutos';
-            if (elements.streak) elements.streak.textContent = stats.streak + ' dias';
-            if (elements.tasksCompleted) elements.tasksCompleted.textContent = stats.tasksCompleted;
-            if (elements.completionRate) elements.completionRate.textContent = stats.completionRate + '%';
-            if (elements.mostProductiveHour) elements.mostProductiveHour.textContent = stats.mostProductiveHour + 'h';
-            if (elements.bestDay) elements.bestDay.textContent = stats.bestDay;
-            if (elements.avgTaskDuration) elements.avgTaskDuration.textContent = stats.avgTaskDuration + ' minutos';
-            if (elements.totalFocusTime) elements.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
+
+            if (elementsToUpdate.streak) elementsToUpdate.streak.textContent = stats.streak + ' dias';
+            if (elementsToUpdate.tasksCompleted) elementsToUpdate.tasksCompleted.textContent = stats.tasksCompleted;
+            if (elementsToUpdate.mostProductiveHour) elementsToUpdate.mostProductiveHour.textContent = stats.mostProductiveHour ? stats.mostProductiveHour + 'h' : '--:--';
+            if (elementsToUpdate.bestDay) elementsToUpdate.bestDay.textContent = stats.bestDay || '--';
+            if (elementsToUpdate.avgTaskDuration) elementsToUpdate.avgTaskDuration.textContent = stats.avgTaskDuration + ' minutos';
+            if (elementsToUpdate.totalFocusTime) elementsToUpdate.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
+            if (elementsToUpdate.focusTimeValueDisplay) elementsToUpdate.focusTimeValueDisplay.textContent = stats.focusTime + ' minutos';
+            if (elementsToUpdate.completionRateValueDisplay) elementsToUpdate.completionRateValueDisplay.textContent = stats.completionRate + '%';
+            
+            updateFocusTimeChart(stats.focusTime);
+            updateCompletionRateChart(stats.completionRate);
           }
           break;
       }
     });
+
+    function updateFocusTimeChart(focusTimeMinutes) {
+        const ctx = document.getElementById('focusTimeChart')?.getContext('2d');
+        if (!ctx) return;
+
+        const primaryColor = getCssVariable('--primary');
+        const textColor = getCssVariable('--text-color');
+        const mutedColor = getCssVariable('--muted');
+        const fontFamily = getCssVariable('--vscode-font-family');
+        
+        const dailyGoalMinutes = 480; // Example: 8 hours
+
+        if (focusTimeChartInstance) {
+            focusTimeChartInstance.data.datasets[0].data = [focusTimeMinutes];
+            focusTimeChartInstance.options.scales.y.max = Math.max(dailyGoalMinutes, focusTimeMinutes + 60); // Ensure goal or current time is visible
+            focusTimeChartInstance.update();
+        } else {
+            focusTimeChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Hoje'],
+                    datasets: [{
+                        label: 'Tempo Focado (minutos)',
+                        data: [focusTimeMinutes],
+                        backgroundColor: [primaryColor],
+                        borderColor: [primaryColor],
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.5,
+                        categoryPercentage: 0.7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y', // Horizontal bar
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: Math.max(dailyGoalMinutes, focusTimeMinutes + 60),
+                            grid: { display: false },
+                            ticks: { 
+                                color: textColor,
+                                font: { family: fontFamily, size: 10 }
+                            }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { 
+                                color: textColor,
+                                font: { family: fontFamily, size: 12 }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: getCssVariable('--border-color'),
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + ' min';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function updateCompletionRateChart(completionRate) {
+        const ctx = document.getElementById('completionRateChart')?.getContext('2d');
+        if (!ctx) return;
+
+        const primaryColor = getCssVariable('--primary');
+        const mutedColor = getCssVariable('--muted'); // For the unfilled part
+        const textColor = getCssVariable('--text-color');
+        const fontFamily = getCssVariable('--vscode-font-family');
+
+        const data = [completionRate, 100 - completionRate];
+
+        if (completionRateChartInstance) {
+            completionRateChartInstance.data.datasets[0].data = data;
+            completionRateChartInstance.update();
+        } else {
+            completionRateChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Concluído', 'Restante'],
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [primaryColor, mutedColor],
+                        borderColor: [primaryColor, mutedColor], // Or card-bg for less visible border
+                        borderWidth: 1,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%', // Makes it a donut
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
+                            titleColor: textColor,
+                            bodyColor: textColor,
+                            borderColor: getCssVariable('--border-color'),
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataIndex === 0) {
+                                        return \`Concluído: \${context.raw}%\`;
+                                    }
+                                    return null; // Don't show tooltip for the "Restante" part
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        arc: {
+                            borderWidth: 0 // Remove border from arcs if not desired
+                        }
+                    }
+                }
+            });
+        }
+    }
   </script>
 </body>
 </html>
         `;
     }
 
+    // Helper to calculate task progress (assuming subtasks determine progress)
     private calculateTaskProgress(task: Task): number {
         if (task.subtasks.length === 0) return 0;
         const completedSubtasks = task.subtasks.filter(s => s.status === TaskStatus.COMPLETED).length;
