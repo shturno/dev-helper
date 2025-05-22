@@ -6,9 +6,11 @@ export class ContextDetector {
     private apiClient: ApiClient;
     private config: vscode.WorkspaceConfiguration;
     private disposables: vscode.Disposable[] = [];
+    private context: vscode.ExtensionContext;
 
-    constructor(apiClient: ApiClient) {
+    constructor(apiClient: ApiClient, context: vscode.ExtensionContext) {
         this.apiClient = apiClient;
+        this.context = context;
         this.config = vscode.workspace.getConfiguration('tdahDevHelper');
     }
 
@@ -28,7 +30,9 @@ export class ContextDetector {
         );
 
         // Verificar periodicamente o horário
-        setInterval(this.checkProductivityHours.bind(this), 5 * 60 * 1000); // A cada 5 minutos
+        setInterval(async () => {
+            await this.checkProductivityHours();
+        }, 5 * 60 * 1000); // A cada 5 minutos
     }
 
     public dispose(): void {
@@ -55,11 +59,15 @@ export class ContextDetector {
 
         // Decidir se deve ativar o modo hiperfoco
         if (complexity > threshold || isPeakTime) {
-            HyperfocusManager.getInstance().activateHyperfocus({
-                reason: complexity > threshold ? 'complex_file' : 'peak_time',
+            const context = {
+                reason: (complexity > threshold ? 'complex_file' : 'peak_time') as 'complex_file' | 'peak_time',
                 complexity,
                 fileName: document.fileName
-            });
+            };
+            const hyperfocusManager = HyperfocusManager.getInstance(this.context);
+            if (hyperfocusManager) {
+                hyperfocusManager.activateHyperfocus(context);
+            }
         }
     }
 

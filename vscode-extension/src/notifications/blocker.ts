@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 export interface BlockedNotification {
-    type: 'info' | 'warning' | 'error';
+    type: 'info' | 'warning' | 'error' | 'blocked';
     message: string;
     timestamp: number;
 }
@@ -19,14 +19,21 @@ export class NotificationBlocker {
     private statusBarItem: vscode.StatusBarItem;
     private isInitialized: boolean = false;
 
-    constructor() {
+    constructor(private context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
             99
         );
         this.statusBarItem.text = '$(bell-slash) Notificações Bloqueadas';
         this.statusBarItem.tooltip = 'Clique para ver notificações bloqueadas';
-        this.statusBarItem.command = 'tdah-dev-helper.showBlockedNotifications';
+        this.statusBarItem.command = 'dev-helper.showBlockedNotifications';
+        
+        // Registrar o comando para mostrar notificações bloqueadas
+        this.disposables.push(
+            vscode.commands.registerCommand('dev-helper.showBlockedNotifications', () => {
+                this.showBlockedNotifications();
+            })
+        );
         
         this.initialize();
     }
@@ -214,5 +221,20 @@ export class NotificationBlocker {
             </body>
             </html>
         `;
+    }
+
+    public blockNotification(message: string): boolean {
+        if (!this.isBlocking || !message) {
+            return false;
+        }
+
+        const notification: BlockedNotification = {
+            type: 'blocked',
+            message,
+            timestamp: Date.now()
+        };
+
+        this.blockedNotifications.push(notification);
+        return true;
     }
 } 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { sanitizeHtml, isValidInput, sanitizeTask, sanitizeForWebview } from '../utils/security';
-import { Task, Subtask, TaskValidation, TaskPriority, TaskStatus } from './types';
+import { sanitizeHtml, isValidInput, sanitizeTask } from '../utils/security';
+import { Task, TaskStatus, TaskPriority, TaskValidation, Subtask, PriorityCriteria } from './types';
 import { GamificationManager, UserData } from '../gamification/manager';
 import { PriorityManager } from './priority-manager';
 import { PrioritySuggestionManager } from './priority-suggestions';
@@ -32,12 +32,15 @@ export class TaskTracker {
         this.statusBarItem.command = 'dev-helper.selectTask';
         
         // Inicializar gerenciadores
-        this.gamificationManager = GamificationManager.getInstance(context);
         this.priorityManager = PriorityManager.getInstance();
         this.prioritySuggestionManager = PrioritySuggestionManager.getInstance();
         
         // Carregar tarefas salvas
-        this.loadTasks();
+        this.loadTasks().catch(error => {
+            console.error('Erro ao carregar tarefas iniciais:', error);
+            vscode.window.showErrorMessage('Erro ao carregar tarefas salvas. Algumas funcionalidades podem estar limitadas.');
+        });
+        
         this.initialize();
         this.startUrgentTaskChecker();
     }
@@ -54,30 +57,109 @@ export class TaskTracker {
 
     private async loadTasks(): Promise<void> {
         try {
-            const savedTasks = this.context.globalState.get<Task[]>('tdah-tasks', []);
-            // Validar e sanitizar tarefas carregadas
-            this.tasks = savedTasks.filter((task): task is Task => {
-                if (!task || typeof task !== 'object') return false;
-                const t = task as Task;
-                return (
-                    typeof t.id === 'number' &&
-                    typeof t.title === 'string' &&
-                    t.title.length > 0 &&
-                    t.title.length <= MAX_TITLE_LENGTH &&
-                    (!t.description || (typeof t.description === 'string' && t.description.length <= MAX_DESCRIPTION_LENGTH)) &&
-                    Object.values(TaskStatus).includes(t.status) &&
-                    typeof t.xpReward === 'number' &&
-                    Array.isArray(t.subtasks) &&
-                    t.subtasks.length <= MAX_SUBTASKS_PER_TASK &&
-                    t.subtasks.every(this.isValidSubtask.bind(this)) &&
-                    t.createdAt instanceof Date &&
-                    t.updatedAt instanceof Date
-                );
+            let savedTasks = this.context.globalState.get<Task[]>('tdah-tasks', []);
+            if (!Array.isArray(savedTasks)) {
+                console.warn('Dados de tarefas inválidos encontrados, inicializando com array vazio');
+                savedTasks = [];
+                await this.context.globalState.update('tdah-tasks', []);
+            }
+            
+            // Converter datas de string para Date e validar dados
+            const reviveDates = (task: any): Task | null => {
+                try {
+                    if (!task || typeof task !== 'object') {
+                        console.warn('Tarefa inválida encontrada:', task);
+                        return null;
+                    }
+
+                    const revivedTask = {
+                        ...task,
+                        createdAt: task.createdAt ? new Date(task.createdAt) : new Date(),
+                        updatedAt: task.updatedAt ? new Date(task.updatedAt) : new Date(),
+                        completedAt: task.completedAt ? new Date(task.completedAt) : undefined,
+                        subtasks: Array.isArray(task.subtasks) ? task.subtasks.map((sub: any) => ({
+                            ...sub,
+                            startedAt: sub.startedAt ? new Date(sub.startedAt) : undefined,
+                            completedAt: sub.completedAt ? new Date(sub.completedAt) : undefined
+                        })) : [],
+                        priorityCriteria: {
+                            ...task.priorityCriteria,
+                            deadline: task.priorityCriteria?.deadline ? new Date(task.priorityCriteria.deadline) : undefined
+                        }
+                    };
+
+                    // Validar campos obrigatórios
+                    if (!this.isValidTask(revivedTask)) {
+                        console.warn('Tarefa com dados inválidos encontrada:', revivedTask);
+                        return null;
+                    }
+
+                    return revivedTask;
+                } catch (error) {
+                    console.error('Erro ao reviver tarefa:', error);
+                    return null;
+                }
+            };
+
+            // Processar e validar todas as tarefas
+            const validTasks = savedTasks
+                .map(reviveDates)
+                .filter((task): task is Task => task !== null);
+
+            if (validTasks.length !== savedTasks.length) {
+                console.warn(`Foram encontradas ${savedTasks.length - validTasks.length} tarefas inválidas`);
+                // Salvar versão sanitizada imediatamente
+                await this.context.globalState.update('tdah-tasks', validTasks);
+            }
+
+            this.tasks = validTasks;
+            
+            // Verificar e corrigir IDs duplicados
+            const taskIds = new Set<number>();
+            this.tasks = this.tasks.map(task => {
+                if (taskIds.has(task.id)) {
+                    const newId = Date.now() + Math.floor(Math.random() * 1000);
+                    taskIds.add(newId);
+                    return { ...task, id: newId };
+                }
+                taskIds.add(task.id);
+                return task;
             });
+
+            // Salvar versão final sanitizada
+            await this.saveTasks();
         } catch (error) {
             console.error('Erro ao carregar tarefas:', error);
             vscode.window.showErrorMessage('Erro ao carregar tarefas salvas');
+            this.tasks = []; // Inicializar com array vazio em caso de erro
+            await this.context.globalState.update('tdah-tasks', []);
         }
+    }
+
+    private isValidTask(task: any): task is Task {
+        return (
+            typeof task === 'object' &&
+            task !== null &&
+            typeof task.id === 'number' &&
+            typeof task.title === 'string' &&
+            task.title.length > 0 &&
+            task.title.length <= MAX_TITLE_LENGTH &&
+            (!task.description || (typeof task.description === 'string' && task.description.length <= MAX_DESCRIPTION_LENGTH)) &&
+            Object.values(TaskStatus).includes(task.status) &&
+            typeof task.xpReward === 'number' &&
+            Array.isArray(task.subtasks) &&
+            task.subtasks.length <= MAX_SUBTASKS_PER_TASK &&
+            task.subtasks.every(this.isValidSubtask.bind(this)) &&
+            task.createdAt instanceof Date &&
+            task.updatedAt instanceof Date &&
+            (!task.completedAt || task.completedAt instanceof Date) &&
+            typeof task.priorityCriteria === 'object' &&
+            task.priorityCriteria !== null &&
+            typeof task.priorityCriteria.complexity === 'number' &&
+            typeof task.priorityCriteria.impact === 'number' &&
+            typeof task.priorityCriteria.estimatedTime === 'number' &&
+            (!task.priorityCriteria.deadline || task.priorityCriteria.deadline instanceof Date)
+        );
     }
 
     private isValidSubtask(subtask: unknown): subtask is Subtask {
@@ -96,12 +178,21 @@ export class TaskTracker {
 
     private async saveTasks(): Promise<void> {
         try {
-            // Sanitizar tarefas antes de salvar
-            const tasksToSave = this.tasks.map(sanitizeTask);
-            await this.context.globalState.update('tdah-tasks', tasksToSave);
+            // Sanitizar e validar tarefas antes de salvar
+            const tasksToSave = this.tasks
+                .map(sanitizeTask)
+                .filter(this.isValidTask.bind(this));
+
+            // Verificar se houve alterações antes de salvar
+            const currentSavedTasks = this.context.globalState.get<Task[]>('tdah-tasks', []);
+            if (JSON.stringify(currentSavedTasks) !== JSON.stringify(tasksToSave)) {
+                await this.context.globalState.update('tdah-tasks', tasksToSave);
+                console.log('Tarefas salvas com sucesso');
+            }
         } catch (error) {
             console.error('Erro ao salvar tarefas:', error);
             vscode.window.showErrorMessage('Erro ao salvar tarefas');
+            throw error; // Propagar erro para tratamento adequado
         }
     }
 
@@ -345,11 +436,19 @@ export class TaskTracker {
                 description: description ? sanitizeHtml(description) : '',
                 status: TaskStatus.PENDING,
                 priority: selectedPriority.priority,
-                priorityCriteria,
+                priorityCriteria: {
+                    complexity,
+                    impact,
+                    estimatedTime,
+                    deadline,
+                    dependencies: []
+                } as PriorityCriteria,
                 xpReward: DEFAULT_XP_REWARD,
                 subtasks: [],
+                tags: [],
                 createdAt: new Date(),
-                updatedAt: new Date()
+                updatedAt: new Date(),
+                focusSessions: []
             };
 
             // Atualizar prioridade baseado nos critérios
@@ -574,7 +673,7 @@ export class TaskTracker {
                     }
 
                     // Adicionar XP e verificar conquistas
-                    await this.gamificationManager.onTaskCompleted(this.currentTask.xpReward);
+                    await this.gamificationManager.onTaskCompleted(this.currentTask);
                 }
 
                 vscode.window.showInformationMessage('Parabéns! Tarefa concluída! 🎉');
@@ -747,7 +846,7 @@ export class TaskTracker {
         if (this.webviewPanel) {
             this.webviewPanel.webview.postMessage({
                 type: 'updateTasks',
-                tasks: sanitizeForWebview(this.tasks)
+                tasks: JSON.stringify(this.tasks)
             });
         }
     }

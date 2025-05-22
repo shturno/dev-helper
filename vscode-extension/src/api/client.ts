@@ -258,6 +258,16 @@ export class ApiClient {
         );
     }
 
+    public async getProductivityHours(): Promise<boolean> {
+        try {
+            const response = await this.client.get<{ isProductiveHour: boolean }>('/productivity/hours');
+            return response.data.isProductiveHour;
+        } catch (error) {
+            console.error('Erro ao verificar horário produtivo:', error);
+            return false;
+        }
+    }
+
     public dispose(): void {
         // Limpar recursos se necessário
     }

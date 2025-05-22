@@ -1,16 +1,17 @@
 export enum TaskStatus {
-    PENDING = 'pending',
-    IN_PROGRESS = 'in_progress',
-    COMPLETED = 'completed',
-    NOT_STARTED = 'not_started',
-    PAUSED = 'paused'
+    PENDING = 'PENDING',
+    IN_PROGRESS = 'IN_PROGRESS',
+    COMPLETED = 'COMPLETED',
+    BLOCKED = 'BLOCKED',
+    INTERRUPTED = 'INTERRUPTED',
+    NOT_STARTED = 'NOT_STARTED'
 }
 
 export enum TaskPriority {
-    LOW = 'low',
-    MEDIUM = 'medium',
-    HIGH = 'high',
-    URGENT = 'urgent'
+    LOW = 'LOW',
+    MEDIUM = 'MEDIUM',
+    HIGH = 'HIGH',
+    URGENT = 'URGENT'
 }
 
 export interface PriorityCriteria {
@@ -34,20 +35,47 @@ export interface Subtask {
 export interface Task {
     id: number;
     title: string;
-    description?: string;
-    status: TaskStatus;
+    description: string;
     priority: TaskPriority;
-    priorityCriteria: PriorityCriteria;
-    xpReward: number;
-    subtasks: Subtask[];
+    status: TaskStatus;
     createdAt: Date;
     updatedAt: Date;
     completedAt?: Date;
+    estimatedTime?: number;
+    actualTime?: number;
+    parentTaskId?: number;
+    subtasks: Subtask[];
+    tags: string[];
+    priorityCriteria: PriorityCriteria;
+    focusSessions?: FocusSession[];
+    xpReward?: number;
+}
+
+export interface FocusSession {
+    id: number;
+    taskId: number;
+    startTime: Date;
+    endTime?: Date;
+    duration: number;
+    interruptions: number;
+    notes?: string;
+}
+
+export interface TaskMetrics {
+    totalTasks: number;
+    completedTasks: number;
+    inProgressTasks: number;
+    blockedTasks: number;
+    averageCompletionTime: number;
+    completionRate: number;
+    focusTime: number;
+    interruptions: number;
 }
 
 export interface TaskValidation {
     isValid: boolean;
     errors: string[];
+    warnings?: string[];
 }
 
 export interface TaskUpdateData {

@@ -1,219 +1,389 @@
 import * as vscode from 'vscode';
-import { Task } from '../tasks/types';
+import { Task, TaskStatus } from '../tasks/types';
+import { Insight } from '../types/analytics';
 
-export interface ProductivityStats {
-    dailyStats: {
-        date: string;
-        focusTime: number;
-        tasksCompleted: number;
-        averageTaskTime: number;
-    }[];
-    weeklyStats: {
-        weekStart: string;
-        totalFocusTime: number;
-        totalTasks: number;
-        completionRate: number;
-        averageSessionLength: number;
-    }[];
-    monthlyStats: {
-        month: string;
-        totalFocusTime: number;
-        totalTasks: number;
-        bestDay: string;
-        bestDayFocusTime: number;
-    }[];
-    insights: {
-        bestTimeOfDay: string;
-        mostProductiveDay: string;
-        averageTaskDuration: number;
-        completionRate: number;
-        streak: number;
-    };
+interface DailyStats {
+    date: Date;
+    focusTime: number;
+    tasksCompleted: number;
+    interruptions: number;
+    taskCompletionRate: number;
+}
+
+interface MonthlyStats {
+    month: Date;
+    totalFocusTime: number;
+    totalTasksCompleted: number;
+    averageCompletionRate: number;
+    bestDay?: Date;
+}
+
+export interface AnalysisStats {
+    streak: number;
+    mostProductiveHour: string;
+    bestDay: string;
+    dailyStats: DailyStats[];
+    monthlyStats: MonthlyStats[];
+    insights: Insight[];
 }
 
 export class AnalysisManager {
     private static instance: AnalysisManager;
-    private config: vscode.WorkspaceConfiguration;
-    private stats: ProductivityStats;
+    private context: vscode.ExtensionContext;
+    private dailyStats: DailyStats[] = [];
+    private monthlyStats: MonthlyStats[] = [];
+    private insights: Insight[] = [];
+    private disposables: vscode.Disposable[] = [];
+    private stats: AnalysisStats = {
+        streak: 0,
+        mostProductiveHour: '--:--',
+        bestDay: '--',
+        dailyStats: [],
+        monthlyStats: [],
+        insights: []
+    };
 
-    private constructor() {
-        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
-        this.stats = this.loadStats();
+    private constructor(context: vscode.ExtensionContext) {
+        this.context = context;
+        this.loadStats();
     }
 
-    public static getInstance(): AnalysisManager {
+    public static getInstance(context?: vscode.ExtensionContext): AnalysisManager {
         if (!AnalysisManager.instance) {
-            AnalysisManager.instance = new AnalysisManager();
+            if (!context) {
+                throw new Error('Context is required for first initialization');
+            }
+            AnalysisManager.instance = new AnalysisManager(context);
         }
         return AnalysisManager.instance;
     }
 
-    private loadStats(): ProductivityStats {
-        try {
-            return this.config.get('productivityStats', {
-                dailyStats: [],
-                weeklyStats: [],
-                monthlyStats: [],
-                insights: {
-                    bestTimeOfDay: '',
-                    mostProductiveDay: '',
-                    averageTaskDuration: 0,
-                    completionRate: 0,
-                    streak: 0
-                }
-            });
-        } catch (error) {
-            console.error('Erro ao carregar estatísticas de produtividade:', error);
-            return {
-                dailyStats: [],
-                weeklyStats: [],
-                monthlyStats: [],
-                insights: {
-                    bestTimeOfDay: '',
-                    mostProductiveDay: '',
-                    averageTaskDuration: 0,
-                    completionRate: 0,
-                    streak: 0
-                }
-            };
+    private loadStats(): void {
+        if (this.context) {
+            const savedStats = this.context.globalState.get<{
+                dailyStats: Array<DailyStats & { date: string }>;
+                monthlyStats: Array<MonthlyStats & { bestDay: string; worstDay: string }>;
+                insights: Insight[];
+            }>('dev-helper-analysis-stats');
+
+            if (savedStats) {
+                this.dailyStats = savedStats.dailyStats.map(stat => ({
+                    ...stat,
+                    date: new Date(stat.date)
+                }));
+
+                this.monthlyStats = savedStats.monthlyStats.map(stat => ({
+                    ...stat,
+                    bestDay: new Date(stat.bestDay),
+                    worstDay: new Date(stat.worstDay)
+                }));
+
+                this.insights = savedStats.insights;
+            }
         }
     }
 
     private async saveStats(): Promise<void> {
-        try {
-            await this.config.update('productivityStats', this.stats, true);
-        } catch (error) {
-            console.error('Erro ao salvar estatísticas de produtividade:', error);
-        }
+        const stats = {
+            streak: this.stats.streak,
+            mostProductiveHour: this.stats.mostProductiveHour,
+            bestDay: this.stats.bestDay,
+            dailyStats: this.dailyStats.map(stat => ({
+                ...stat,
+                date: stat.date.toISOString()
+            })),
+            monthlyStats: this.monthlyStats.map(stat => ({
+                ...stat,
+                month: stat.month.toISOString(),
+                bestDay: stat.bestDay?.toISOString()
+            })),
+            insights: this.insights
+        };
+
+        await this.context.globalState.update('analysisStats', stats);
     }
 
-    public async updateStats(focusTime: number, tasks: Task[]): Promise<void> {
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        const weekStart = this.getWeekStart(today);
-        const monthStr = today.toISOString().slice(0, 7);
+    public async updateStats(tasks: Task[]): Promise<void> {
+        const today = new Date().toISOString().split('T')[0];
+        let todayStats = this.dailyStats.find(d => d.date.toISOString().split('T')[0] === today);
 
-        // Atualizar estatísticas diárias
-        const dailyStat = this.stats.dailyStats.find(s => s.date === todayStr) || {
-            date: todayStr,
-            focusTime: 0,
-            tasksCompleted: 0,
-            averageTaskTime: 0
-        };
-
-        dailyStat.focusTime += focusTime;
-        const completedTasks = tasks.filter(t => t.status === 'completed');
-        dailyStat.tasksCompleted = completedTasks.length;
-        dailyStat.averageTaskTime = dailyStat.focusTime / (dailyStat.tasksCompleted || 1);
-
-        if (!this.stats.dailyStats.find(s => s.date === todayStr)) {
-            this.stats.dailyStats.push(dailyStat);
+        if (!todayStats) {
+            todayStats = {
+                date: new Date(today),
+                focusTime: 0,
+                tasksCompleted: 0,
+                interruptions: 0,
+                taskCompletionRate: 0
+            };
+            this.dailyStats.push(todayStats);
         }
 
-        // Atualizar estatísticas semanais
-        const weeklyStat = this.stats.weeklyStats.find(s => s.weekStart === weekStart) || {
-            weekStart,
-            totalFocusTime: 0,
-            totalTasks: 0,
-            completionRate: 0,
-            averageSessionLength: 0
-        };
-
-        weeklyStat.totalFocusTime += focusTime;
-        weeklyStat.totalTasks = tasks.length;
-        weeklyStat.completionRate = (completedTasks.length / tasks.length) * 100;
-        weeklyStat.averageSessionLength = weeklyStat.totalFocusTime / (this.stats.dailyStats.filter(s => s.date.startsWith(weekStart)).length || 1);
-
-        if (!this.stats.weeklyStats.find(s => s.weekStart === weekStart)) {
-            this.stats.weeklyStats.push(weeklyStat);
-        }
-
-        // Atualizar estatísticas mensais
-        const monthlyStat = this.stats.monthlyStats.find(s => s.month === monthStr) || {
-            month: monthStr,
-            totalFocusTime: 0,
-            totalTasks: 0,
-            bestDay: '',
-            bestDayFocusTime: 0
-        };
-
-        monthlyStat.totalFocusTime += focusTime;
-        monthlyStat.totalTasks = tasks.length;
-
-        // Atualizar melhor dia do mês
-        const monthDays = this.stats.dailyStats.filter(s => s.date.startsWith(monthStr));
-        const bestDay = monthDays.reduce((best, current) => 
-            current.focusTime > best.focusTime ? current : best
-        , { date: '', focusTime: 0 });
-
-        monthlyStat.bestDay = bestDay.date;
-        monthlyStat.bestDayFocusTime = bestDay.focusTime;
-
-        if (!this.stats.monthlyStats.find(s => s.month === monthStr)) {
-            this.stats.monthlyStats.push(monthlyStat);
+        // Atualizar métricas diárias
+        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED);
+        if (todayStats) {
+            todayStats.tasksCompleted = completedTasks.length;
+            todayStats.focusTime = completedTasks.reduce((total, task) => {
+                const focusTime = task.completedAt ? 
+                    (task.completedAt.getTime() - task.createdAt.getTime()) / (1000 * 60) : 0;
+                return total + focusTime;
+            }, 0);
+            todayStats.interruptions = tasks.filter(t => t.status === TaskStatus.INTERRUPTED).length;
+            todayStats.taskCompletionRate = tasks.length > 0 ? 
+                (completedTasks.length / tasks.length) : 0;
         }
 
         // Atualizar insights
-        this.updateInsights();
+        await this.updateInsights();
 
-        // Salvar estatísticas
+        // Atualizar estatísticas mensais
+        await this.updateMonthlyStats();
+
+        // Salvar estatísticas atualizadas
         await this.saveStats();
     }
 
-    private updateInsights(): void {
-        const last30Days = this.stats.dailyStats.slice(-30);
-        if (last30Days.length === 0) return;
+    private async updateMonthlyStats(): Promise<void> {
+        const now = new Date();
+        const month = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        let monthlyStat = this.monthlyStats.find(m => 
+            m.month.getFullYear() === month.getFullYear() &&
+            m.month.getMonth() === month.getMonth()
+        );
 
-        // Melhor horário do dia
-        const hourlyStats = new Array(24).fill(0);
-        last30Days.forEach(day => {
-            // Aqui você pode adicionar lógica para analisar horários específicos
-            // Por enquanto, vamos usar uma distribuição simples
-            const hour = Math.floor(Math.random() * 24); // Simulado
-            hourlyStats[hour] += day.focusTime;
-        });
-        const bestHour = hourlyStats.indexOf(Math.max(...hourlyStats));
-        this.stats.insights.bestTimeOfDay = `${bestHour}:00`;
+        if (!monthlyStat) {
+            monthlyStat = {
+                month,
+                totalFocusTime: 0,
+                totalTasksCompleted: 0,
+                averageCompletionRate: 0
+            };
+            this.monthlyStats.push(monthlyStat);
+        }
 
-        // Dia mais produtivo
-        const mostProductiveDay = last30Days.reduce((best, current) => 
-            current.focusTime > best.focusTime ? current : best
-        , { date: '', focusTime: 0 });
-        this.stats.insights.mostProductiveDay = mostProductiveDay.date;
+        const monthTasks = this.dailyStats.filter(d => 
+            d.date.getFullYear() === month.getFullYear() &&
+            d.date.getMonth() === month.getMonth()
+        );
 
-        // Duração média das tarefas
-        const totalTaskTime = last30Days.reduce((sum, day) => sum + day.focusTime, 0);
-        const totalTasks = last30Days.reduce((sum, day) => sum + day.tasksCompleted, 0);
-        this.stats.insights.averageTaskDuration = totalTaskTime / (totalTasks || 1);
+        if (monthlyStat) {
+            monthlyStat.totalTasksCompleted = monthTasks.reduce((sum, d) => sum + d.tasksCompleted, 0);
+            monthlyStat.totalFocusTime = monthTasks.reduce((sum, d) => sum + d.focusTime, 0);
+            monthlyStat.averageCompletionRate = Math.round(
+                monthTasks.reduce((sum, d) => sum + d.interruptions, 0) / monthTasks.length
+            );
 
-        // Taxa de conclusão
-        const totalTasksStarted = last30Days.reduce((sum, day) => sum + day.tasksCompleted, 0);
-        const totalTasksCompleted = last30Days.reduce((sum, day) => sum + day.tasksCompleted, 0);
-        this.stats.insights.completionRate = (totalTasksCompleted / (totalTasksStarted || 1)) * 100;
-
-        // Sequência de dias produtivos
-        let currentStreak = 0;
-        let maxStreak = 0;
-        for (let i = last30Days.length - 1; i >= 0; i--) {
-            if (last30Days[i].focusTime > 0) {
-                currentStreak++;
-                maxStreak = Math.max(maxStreak, currentStreak);
-            } else {
-                currentStreak = 0;
+            // Encontrar melhor dia
+            const sortedDays = [...monthTasks].sort((a, b) => b.focusTime - a.focusTime);
+            if (sortedDays.length > 0) {
+                monthlyStat.bestDay = sortedDays[0].date;
             }
         }
-        this.stats.insights.streak = maxStreak;
+
+        await this.saveStats();
     }
 
-    private getWeekStart(date: Date): string {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        d.setDate(diff);
-        return d.toISOString().split('T')[0];
+    private async updateInsights(): Promise<void> {
+        const newInsights: Insight[] = [];
+
+        // Gerar insight de streak
+        const streak = this.calculateStreak();
+        if (streak > 0) {
+            newInsights.push({
+                type: 'streak',
+                message: `Você manteve um streak de ${streak} dias! Continue assim!`,
+                date: new Date()
+            });
+        }
+
+        // Gerar insight de tempo de foco
+        const focusTimeInsight = this.analyzeFocusTime();
+        if (focusTimeInsight) {
+            newInsights.push({
+                type: 'focus_time',
+                message: focusTimeInsight,
+                date: new Date()
+            });
+        }
+
+        // Gerar insight de eficiência
+        const efficiencyInsight = this.analyzeEfficiency();
+        if (efficiencyInsight) {
+            newInsights.push({
+                type: 'efficiency',
+                message: efficiencyInsight,
+                date: new Date()
+            });
+        }
+
+        this.insights = newInsights;
+        await this.saveStats();
     }
 
-    public getStats(): ProductivityStats {
-        return { ...this.stats };
+    private calculateStreak(): number {
+        const today = new Date().toISOString().split('T')[0];
+        const sortedDays = [...this.dailyStats]
+            .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+        let streak = 0;
+        const currentDate = new Date(today);
+
+        for (const day of sortedDays) {
+            const dayDate = day.date.toISOString().split('T')[0];
+            const expectedDate = currentDate.toISOString().split('T')[0];
+
+            if (dayDate === expectedDate && day.tasksCompleted > 0) {
+                streak++;
+                currentDate.setDate(currentDate.getDate() - 1);
+            } else {
+                break;
+            }
+        }
+
+        return streak;
+    }
+
+    private analyzeFocusTime(): string | null {
+        if (this.dailyStats.length === 0) return null;
+
+        const recentStats = this.dailyStats.slice(-7);
+        const avgFocusTime = recentStats.reduce((sum, stat) => sum + stat.focusTime, 0) / recentStats.length;
+
+        if (avgFocusTime > 240) { // 4 horas
+            return 'Excelente tempo de foco! Você está mantendo uma boa consistência.';
+        } else if (avgFocusTime < 60) { // 1 hora
+            return 'Seu tempo de foco está baixo. Que tal tentar a técnica Pomodoro?';
+        }
+        return null;
+    }
+
+    private analyzeEfficiency(): string | null {
+        if (this.dailyStats.length === 0) return null;
+
+        const recentStats = this.dailyStats.slice(-7);
+        const avgCompletionRate = recentStats.reduce((sum, stat) => sum + stat.taskCompletionRate, 0) / recentStats.length;
+
+        if (avgCompletionRate > 0.8) {
+            return 'Sua taxa de conclusão de tarefas está excelente!';
+        } else if (avgCompletionRate < 0.4) {
+            return 'Sua taxa de conclusão está baixa. Considere dividir suas tarefas em partes menores.';
+        }
+        return null;
+    }
+
+    public showInsights(): void {
+        const panel = vscode.window.createWebviewPanel(
+            'productivityInsights',
+            'Insights de Produtividade',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+
+        panel.webview.html = this.getInsightsContent();
+    }
+
+    private getInsightsContent(): string {
+        const { insights } = this;
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {
+                        font-family: var(--vscode-font-family);
+                        padding: 20px;
+                        color: var(--vscode-editor-foreground);
+                        background-color: var(--vscode-editor-background);
+                    }
+                    .insights-header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }
+                    .insights-title {
+                        font-size: 2em;
+                        margin: 0;
+                        color: var(--vscode-textLink-foreground);
+                    }
+                    .insights-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                        gap: 20px;
+                        margin-bottom: 30px;
+                    }
+                    .insight-card {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        padding: 20px;
+                        border-radius: 8px;
+                    }
+                    .insight-card h2 {
+                        margin: 0 0 15px 0;
+                        color: var(--vscode-textLink-foreground);
+                    }
+                    .pattern-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 10px;
+                    }
+                    .pattern-item {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        padding: 10px;
+                        background: var(--vscode-editor-background);
+                        border-radius: 4px;
+                    }
+                    .pattern-value {
+                        font-size: 1.2em;
+                        font-weight: bold;
+                        color: var(--vscode-textLink-foreground);
+                    }
+                    .pattern-label {
+                        font-size: 0.9em;
+                        color: var(--vscode-descriptionForeground);
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="insights-header">
+                    <h1 class="insights-title">Insights de Produtividade</h1>
+                </div>
+
+                <div class="insights-grid">
+                    ${insights.map(insight => `
+                        <div class="insight-card">
+                            <h2>${insight.type.charAt(0).toUpperCase() + insight.type.slice(1)}</h2>
+                            <p>${insight.message}</p>
+                            <p>Data: ${insight.date.toLocaleDateString()}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </body>
+            </html>
+        `;
+    }
+
+    public getStats(): AnalysisStats {
+        return {
+            streak: this.stats.streak,
+            mostProductiveHour: this.stats.mostProductiveHour,
+            bestDay: this.stats.bestDay,
+            dailyStats: [...this.dailyStats],
+            monthlyStats: [...this.monthlyStats],
+            insights: [...this.insights]
+        };
+    }
+
+    public getInsights(): Insight[] {
+        return [...this.insights];
+    }
+
+    public dispose(): void {
+        this.disposables.forEach(d => d.dispose());
     }
 } 

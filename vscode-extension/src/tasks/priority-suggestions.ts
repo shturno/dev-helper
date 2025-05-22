@@ -1,4 +1,4 @@
-import { Task, TaskPriority, PriorityCriteria } from './types';
+import { Task, TaskPriority, PriorityCriteria, TaskStatus } from './types';
 
 interface TaskHistory {
     taskId: number;
@@ -31,7 +31,7 @@ export class PrioritySuggestionManager {
     }
 
     public addToHistory(task: Task, actualTimeSpent: number): void {
-        if (task.status === 'completed' && task.completedAt) {
+        if (task.status === TaskStatus.COMPLETED && task.completedAt) {
             const historyEntry: TaskHistory = {
                 taskId: task.id,
                 title: task.title,
@@ -51,8 +51,15 @@ export class PrioritySuggestionManager {
     }
 
     public getPrioritySuggestion(criteria: PriorityCriteria): PrioritySuggestion {
-        const similarTasks = this.findSimilarTasks(criteria);
-        const suggestion = this.analyzeSimilarTasks(similarTasks, criteria);
+        const fullCriteria: PriorityCriteria = {
+            complexity: criteria.complexity,
+            impact: criteria.impact,
+            estimatedTime: criteria.estimatedTime,
+            deadline: criteria.deadline,
+            dependencies: criteria.dependencies || []
+        };
+        const similarTasks = this.findSimilarTasks(fullCriteria);
+        const suggestion = this.analyzeSimilarTasks(similarTasks, fullCriteria);
         return suggestion;
     }
 

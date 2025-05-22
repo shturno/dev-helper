@@ -6,6 +6,9 @@ import { NotificationBlocker } from './notifications/blocker';
 import { DashboardView } from './views/dashboard';
 import { GamificationManager } from './gamification/manager';
 import { TaskPriority } from './tasks/types';
+import { Logger } from './utils/logger';
+import { validateWebviewMessage } from './utils/security';
+import { AnalysisManager } from './analysis/manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
@@ -14,6 +17,7 @@ let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
 let dashboardView: DashboardView | null = null;
 let gamificationManager: GamificationManager | null = null;
+let logger: Logger;
 
 // IDs dos comandos
 const COMMANDS = {
@@ -30,54 +34,48 @@ const COMMANDS = {
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    console.warn('Dev Helper: Iniciando ativação...');
-
     try {
+        // Inicializar logger
+        logger = Logger.getInstance();
+        logger.info('Iniciando ativação da extensão...');
+
         // Limpar o contexto anterior
         context.subscriptions.forEach(d => d.dispose());
         context.subscriptions.length = 0;
 
-        console.warn('Dev Helper: Inicializando HyperfocusManager...');
-        hyperfocusManager = HyperfocusManager.getInstance();
-        console.warn('Dev Helper: HyperfocusManager inicializado');
+        logger.debug('Inicializando HyperfocusManager...');
+        hyperfocusManager = HyperfocusManager.getInstance(context);
+        await hyperfocusManager.initialize();
+        logger.info('HyperfocusManager inicializado');
 
-        console.warn('Dev Helper: Inicializando NotificationBlocker...');
-        notificationBlocker = new NotificationBlocker();
-        console.warn('Dev Helper: NotificationBlocker inicializado');
+        logger.debug('Inicializando NotificationBlocker...');
+        notificationBlocker = new NotificationBlocker(context);
+        logger.info('NotificationBlocker inicializado');
 
-        console.warn('Dev Helper: Inicializando TaskTracker...');
+        logger.debug('Inicializando TaskTracker...');
         taskTracker = TaskTracker.getInstance(context);
-        console.warn('Dev Helper: TaskTracker inicializado');
+        logger.info('TaskTracker inicializado');
 
-        console.warn('Dev Helper: Inicializando GamificationManager...');
+        logger.debug('Inicializando GamificationManager...');
         gamificationManager = GamificationManager.getInstance(context);
         await gamificationManager.initialize();
-        console.warn('Dev Helper: GamificationManager inicializado');
+        logger.info('GamificationManager inicializado');
 
         // Inicializar o DashboardView
         if (hyperfocusManager && taskTracker) {
-            console.warn('Dev Helper: Inicializando DashboardView...');
-            dashboardView = DashboardView.getInstance(context);
-            console.warn('Dev Helper: DashboardView inicializado');
-        }
+            logger.debug('Inicializando DashboardView...');
+            const analysisManager = AnalysisManager.getInstance(context);
+            dashboardView = DashboardView.getInstance(taskTracker, hyperfocusManager, analysisManager);
+            logger.info('DashboardView inicializado');
 
-        // Registrar o provider da view do dashboard
-        context.subscriptions.push(
-            vscode.window.registerWebviewViewProvider(
-                'dev-helper.dashboard',
-                {
-                    resolveWebviewView: (webviewView) => {
-                        if (dashboardView) {
-                            dashboardView.resolveWebviewView(
-                                webviewView,
-                                { state: {} },
-                                new vscode.CancellationTokenSource().token
-                            );
-                        }
-                    }
-                }
-            )
-        );
+            // Registrar o provider da view do dashboard
+            context.subscriptions.push(
+                vscode.window.registerWebviewViewProvider(
+                    'dev-helper.dashboard',
+                    dashboardView
+                )
+            );
+        }
 
         // Inicializar componentes opcionais baseados na configuração
         const config = vscode.workspace.getConfiguration('devHelper');
@@ -85,17 +83,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const debug = config.get<boolean>('debug');
 
         if (debug) {
-            console.warn('Dev Helper: Modo debug ativado');
-            console.warn('Dev Helper: API URL:', apiUrl || 'não configurada');
-            console.warn('Dev Helper: Diretório de extensão:', context.extensionPath);
-            console.warn('Dev Helper: Ambiente de desenvolvimento:', process.env.NODE_ENV);
+            logger.debug('Modo debug ativado');
+            logger.debug('API URL:', apiUrl || 'não configurada');
+            logger.debug('Diretório de extensão:', context.extensionPath);
+            logger.debug('Ambiente de desenvolvimento:', process.env.NODE_ENV);
         }
 
         if (apiUrl) {
             try {
                 apiClient = new ApiClient(apiUrl);
+                logger.info('API Client inicializado com sucesso');
             } catch (error) {
-                console.error('Dev Helper: Erro ao inicializar API:', error);
+                logger.error('Erro ao inicializar API:', error as Error);
                 vscode.window.showWarningMessage(
                     'Dev Helper: API não disponível. Algumas funcionalidades estarão limitadas.'
                 );
@@ -116,10 +115,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     if (notificationBlocker) {
                         notificationBlocker.startBlocking();
                     }
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.info('Modo hiperfoco ativado manualmente');
                     vscode.window.showInformationMessage('Modo hiperfoco ativado!');
                 } catch (error) {
-                    console.error('Erro ao iniciar modo hiperfoco:', error);
+                    logger.error('Erro ao iniciar modo hiperfoco:', error as Error);
                     vscode.window.showErrorMessage('Erro ao iniciar modo hiperfoco');
                 }
             }),
@@ -133,10 +133,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     if (notificationBlocker) {
                         notificationBlocker.stopBlocking();
                     }
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.info('Modo hiperfoco desativado manualmente');
                     vscode.window.showInformationMessage('Modo hiperfoco desativado!');
                 } catch (error) {
-                    console.error('Erro ao parar modo hiperfoco:', error);
+                    logger.error('Erro ao parar modo hiperfoco:', error as Error);
                     vscode.window.showErrorMessage('Erro ao parar modo hiperfoco');
                 }
             }),
@@ -144,8 +145,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.showDashboard, async () => {
                 try {
                     await vscode.commands.executeCommand('dev-helper.dashboard.focus');
+                    logger.debug('Dashboard aberto');
                 } catch (error) {
-                    console.error('Erro ao mostrar dashboard:', error);
+                    logger.error('Erro ao mostrar dashboard:', error as Error);
                     vscode.window.showErrorMessage('Erro ao mostrar dashboard. Por favor, tente novamente.');
                 }
             }),
@@ -153,9 +155,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.createTask, async () => {
                 try {
                     await taskTracker?.createTask();
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.info('Nova tarefa criada');
                 } catch (error) {
-                    console.error('Erro ao criar tarefa:', error);
+                    logger.error('Erro ao criar tarefa:', error as Error);
                     vscode.window.showErrorMessage('Erro ao criar tarefa. Por favor, tente novamente.');
                 }
             }),
@@ -163,9 +166,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.decomposeTask, async () => {
                 try {
                     await taskTracker?.decomposeCurrentTask();
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.info('Tarefa decomposta');
                 } catch (error) {
-                    console.error('Erro ao decompor tarefa:', error);
+                    logger.error('Erro ao decompor tarefa:', error as Error);
                     vscode.window.showErrorMessage('Erro ao decompor tarefa. Por favor, tente novamente.');
                 }
             }),
@@ -173,15 +177,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.showBlockedNotifications, async () => {
                 if (notificationBlocker) {
                     notificationBlocker.showBlockedNotifications();
+                    logger.debug('Notificações bloqueadas exibidas');
                 }
             }),
 
             vscode.commands.registerCommand(COMMANDS.moveTaskUp, async (taskId: number) => {
                 try {
                     await taskTracker?.moveTaskUp(taskId);
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.debug(`Tarefa ${taskId} movida para cima`);
                 } catch (error) {
-                    console.error('Erro ao mover tarefa para cima:', error);
+                    logger.error('Erro ao mover tarefa para cima:', error as Error);
                     vscode.window.showErrorMessage('Erro ao mover tarefa');
                 }
             }),
@@ -189,9 +195,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.moveTaskDown, async (taskId: number) => {
                 try {
                     await taskTracker?.moveTaskDown(taskId);
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.debug(`Tarefa ${taskId} movida para baixo`);
                 } catch (error) {
-                    console.error('Erro ao mover tarefa para baixo:', error);
+                    logger.error('Erro ao mover tarefa para baixo:', error as Error);
                     vscode.window.showErrorMessage('Erro ao mover tarefa');
                 }
             }),
@@ -199,19 +206,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.commands.registerCommand(COMMANDS.setTaskPriority, async (taskId: number, priority: TaskPriority) => {
                 try {
                     await taskTracker?.setTaskPriority(taskId, priority);
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.debug(`Prioridade da tarefa ${taskId} alterada para ${priority}`);
                 } catch (error) {
-                    console.error('Erro ao definir prioridade:', error);
+                    logger.error('Erro ao definir prioridade:', error as Error);
                     vscode.window.showErrorMessage('Erro ao definir prioridade da tarefa');
                 }
             }),
 
             vscode.commands.registerCommand(COMMANDS.reorderTasks, async (taskIds: number[]) => {
                 try {
+                    const validatedMessage = validateWebviewMessage({ type: 'update', taskIds });
+                    if (!validatedMessage) {
+                        throw new Error('Dados de reordenação inválidos');
+                    }
                     await taskTracker?.reorderTasks(taskIds);
-                    dashboardView?.update();
+                    updateDashboard();
+                    logger.debug('Tarefas reordenadas:', taskIds);
                 } catch (error) {
-                    console.error('Erro ao reordenar tarefas:', error);
+                    logger.error('Erro ao reordenar tarefas:', error as Error);
                     vscode.window.showErrorMessage('Erro ao reordenar tarefas');
                 }
             })
@@ -223,6 +236,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Adicionar um disposable para limpeza geral
         context.subscriptions.push({
             dispose: () => {
+                logger.info('Desativando extensão...');
                 if (taskTracker) {
                     taskTracker.dispose();
                 }
@@ -232,19 +246,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 if (dashboardView) {
                     dashboardView.dispose();
                 }
+                if (notificationBlocker) {
+                    notificationBlocker.dispose();
+                }
+                if (gamificationManager) {
+                    gamificationManager.dispose();
+                }
+                if (hyperfocusManager) {
+                    hyperfocusManager.dispose();
+                }
+                if (logger) {
+                    logger.dispose();
+                }
+                logger.info('Extensão desativada');
             }
         });
 
-        console.warn('Dev Helper: Ativação concluída com sucesso');
+        logger.info('Extensão ativada com sucesso');
     } catch (error) {
-        console.error('Dev Helper: Erro detalhado ao ativar a extensão:', error);
-        if (error instanceof Error) {
-            console.error('Dev Helper: Stack trace:', error.stack);
-        }
+        logger.error('Erro detalhado ao ativar a extensão:', error as Error);
         throw error;
     }
 }
 
 export function deactivate(): void {
     // A limpeza é feita através dos disposables no contexto
+    logger?.info('Extensão desativada');
 }
+
+const updateDashboard = () => {
+    if (dashboardView) {
+        dashboardView.update();
+    }
+};

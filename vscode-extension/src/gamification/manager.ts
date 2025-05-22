@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { Task, TaskPriority } from '../tasks/types';
 
 export interface Achievement {
     id: string;
@@ -26,24 +27,28 @@ export interface UserData {
     totalTasks: number;
     totalSubtasks: number;
     totalFocusSessions: number;
+    lastTaskDate: Date | null;
 }
 
 export class GamificationManager {
     private static instance: GamificationManager;
+    private context!: vscode.ExtensionContext;
+    private achievements: Set<string> = new Set();
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
-    private achievements: Achievement[] = [];
     private levelUpRewards: LevelUpReward[] = [];
     private currentUserData: UserData | null = null;
 
-    private constructor(private context: vscode.ExtensionContext) {
+    private constructor(context: vscode.ExtensionContext) {
+        this.context = context;
         this.statusBarItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Right,
-            98
+            vscode.StatusBarAlignment.Left,
+            100
         );
         this.initializeAchievements();
-        this.initializeLevelRewards();
-        this.loadUserData();
+        this.initializeLevelUpRewards();
+        this.loadState();
+        this.updateStatusBar();
     }
 
     public static getInstance(context?: vscode.ExtensionContext): GamificationManager {
@@ -56,7 +61,7 @@ export class GamificationManager {
         return GamificationManager.instance;
     }
 
-    private loadUserData(): void {
+    private loadState(): void {
         try {
             const savedData = this.context.globalState.get<UserData>('dev-helper-gamification-data');
             if (savedData) {
@@ -72,9 +77,10 @@ export class GamificationManager {
                     totalFocusTime: 0,
                     totalTasks: 0,
                     totalSubtasks: 0,
-                    totalFocusSessions: 0
+                    totalFocusSessions: 0,
+                    lastTaskDate: null
                 };
-                this.saveUserData();
+                this.saveState();
             }
         } catch (error) {
             console.error('Erro ao carregar dados de gamificação:', error);
@@ -89,12 +95,13 @@ export class GamificationManager {
                 totalFocusTime: 0,
                 totalTasks: 0,
                 totalSubtasks: 0,
-                totalFocusSessions: 0
+                totalFocusSessions: 0,
+                lastTaskDate: null
             };
         }
     }
 
-    private async saveUserData(): Promise<void> {
+    private async saveState(): Promise<void> {
         try {
             await this.context.globalState.update('dev-helper-gamification-data', this.currentUserData);
         } catch (error) {
@@ -104,115 +111,33 @@ export class GamificationManager {
     }
 
     private initializeAchievements(): void {
-        this.achievements = [
+        this.achievements = new Set([
             // Conquistas de Tarefas
-            {
-                id: 'first_task',
-                title: 'Primeira Tarefa',
-                description: 'Complete sua primeira tarefa',
-                icon: '$(trophy)',
-                xpReward: 100
-            },
-            {
-                id: 'task_warrior',
-                title: 'Guerreiro das Tarefas',
-                description: 'Complete 50 tarefas',
-                icon: '$(shield)',
-                xpReward: 1000
-            },
-            {
-                id: 'task_master',
-                title: 'Mestre das Tarefas',
-                description: 'Complete 100 tarefas',
-                icon: '$(crown)',
-                xpReward: 2000
-            },
+            'first_task',
+            'task_warrior',
+            'task_master',
             // Conquistas de Hiperfoco
-            {
-                id: 'focus_master',
-                title: 'Mestre do Foco',
-                description: 'Complete 10 sessões de hiperfoco',
-                icon: '$(zap)',
-                xpReward: 500
-            },
-            {
-                id: 'focus_legend',
-                title: 'Lenda do Foco',
-                description: 'Complete 50 sessões de hiperfoco',
-                icon: '$(star)',
-                xpReward: 1500
-            },
+            'focus_master',
+            'focus_legend',
             // Conquistas de Tempo
-            {
-                id: 'early_bird',
-                title: 'Madrugador',
-                description: 'Complete uma tarefa antes das 9h',
-                icon: '$(sun)',
-                xpReward: 300
-            },
-            {
-                id: 'night_owl',
-                title: 'Coruja Noturna',
-                description: 'Complete uma tarefa após as 22h',
-                icon: '$(moon)',
-                xpReward: 300
-            },
+            'early_bird',
+            'night_owl',
             // Conquistas de Produtividade
-            {
-                id: 'streak_3',
-                title: 'Em Ritmo',
-                description: 'Mantenha um streak de 3 dias',
-                icon: '$(flame)',
-                xpReward: 400
-            },
-            {
-                id: 'streak_7',
-                title: 'Em Chamas',
-                description: 'Mantenha um streak de 7 dias',
-                icon: '$(flame)',
-                xpReward: 1000
-            },
-            {
-                id: 'streak_30',
-                title: 'Incendiário',
-                description: 'Mantenha um streak de 30 dias',
-                icon: '$(flame)',
-                xpReward: 5000
-            },
+            'streak_3',
+            'streak_7',
+            'streak_30',
             // Conquistas de Subtarefas
-            {
-                id: 'subtask_master',
-                title: 'Mestre das Subtarefas',
-                description: 'Complete 100 subtarefas',
-                icon: '$(checklist)',
-                xpReward: 800
-            },
+            'subtask_master',
             // Conquistas de Tempo Total
-            {
-                id: 'time_1h',
-                title: 'Primeira Hora',
-                description: 'Acumule 1 hora de tempo focado',
-                icon: '$(clock)',
-                xpReward: 200
-            },
-            {
-                id: 'time_10h',
-                title: 'Dez Horas',
-                description: 'Acumule 10 horas de tempo focado',
-                icon: '$(clock)',
-                xpReward: 1000
-            },
-            {
-                id: 'time_100h',
-                title: 'Centenário',
-                description: 'Acumule 100 horas de tempo focado',
-                icon: '$(clock)',
-                xpReward: 5000
-            }
-        ];
+            'time_1h',
+            'time_10h',
+            'time_100h',
+            // Conquistas de prioridade
+            'priority_king'
+        ]);
     }
 
-    private initializeLevelRewards(): void {
+    private initializeLevelUpRewards(): void {
         this.levelUpRewards = [
             {
                 level: 5,
@@ -304,84 +229,244 @@ export class GamificationManager {
     }
 
     private async checkAchievements(): Promise<void> {
-        // Verificar conquistas baseadas em tempo
-        const hour = new Date().getHours();
-        if (hour >= 5 && hour < 9) {
-            await this.unlockAchievement('early_bird');
-        } else if (hour >= 22 || hour < 5) {
-            await this.unlockAchievement('night_owl');
+        try {
+            if (!this.currentUserData) {
+                throw new Error('Dados do usuário não inicializados');
+            }
+
+            const achievementsToCheck = [
+                // Conquistas baseadas em tempo
+                {
+                    id: 'early_bird',
+                    condition: () => {
+                        const hour = new Date().getHours();
+                        return hour >= 5 && hour < 9;
+                    }
+                },
+                {
+                    id: 'night_owl',
+                    condition: () => {
+                        const hour = new Date().getHours();
+                        return hour >= 22 || hour < 5;
+                    }
+                },
+                // Conquistas de streak
+                {
+                    id: 'streak_3',
+                    condition: () => this.currentUserData!.streak >= 3
+                },
+                {
+                    id: 'streak_7',
+                    condition: () => this.currentUserData!.streak >= 7
+                },
+                {
+                    id: 'streak_30',
+                    condition: () => this.currentUserData!.streak >= 30
+                },
+                // Conquistas de tempo total
+                {
+                    id: 'time_1h',
+                    condition: () => (this.currentUserData!.totalFocusTime / 60) >= 1
+                },
+                {
+                    id: 'time_10h',
+                    condition: () => (this.currentUserData!.totalFocusTime / 60) >= 10
+                },
+                {
+                    id: 'time_100h',
+                    condition: () => (this.currentUserData!.totalFocusTime / 60) >= 100
+                },
+                // Conquistas de tarefas
+                {
+                    id: 'task_warrior',
+                    condition: () => this.currentUserData!.totalTasks >= 50
+                },
+                {
+                    id: 'task_master',
+                    condition: () => this.currentUserData!.totalTasks >= 100
+                },
+                // Conquistas de subtarefas
+                {
+                    id: 'subtask_master',
+                    condition: () => this.currentUserData!.totalSubtasks >= 100
+                },
+                // Conquistas de hiperfoco
+                {
+                    id: 'focus_master',
+                    condition: () => this.currentUserData!.totalFocusSessions >= 10
+                },
+                {
+                    id: 'focus_legend',
+                    condition: () => this.currentUserData!.totalFocusSessions >= 50
+                },
+                // Conquistas de prioridade
+                {
+                    id: 'priority_king',
+                    condition: () => this.currentUserData!.totalTasks >= 5 && 
+                        this.currentUserData!.totalTasks >= 10 && 
+                        this.currentUserData!.totalTasks >= 20 && 
+                        this.currentUserData!.totalTasks >= 50
+                }
+            ];
+
+            // Verificar cada conquista
+            for (const achievement of achievementsToCheck) {
+                const existingAchievement = this.achievements.has(achievement.id);
+                if (!existingAchievement && achievement.condition()) {
+                    await this.unlockAchievement(achievement.id);
+                }
+            }
+
+            // Verificar conquistas especiais
+            await this.checkSpecialAchievements();
+        } catch (error) {
+            console.error('Erro ao verificar conquistas:', error);
         }
-
-        // Verificar conquistas de streak
-        const streak = this.currentUserData?.streak || 0;
-        if (streak >= 3) await this.unlockAchievement('streak_3');
-        if (streak >= 7) await this.unlockAchievement('streak_7');
-        if (streak >= 30) await this.unlockAchievement('streak_30');
-
-        // Verificar conquistas de tempo total
-        const totalFocusTime = this.currentUserData?.totalFocusTime || 0;
-        const totalFocusHours = totalFocusTime / 60;
-        if (totalFocusHours >= 1) await this.unlockAchievement('time_1h');
-        if (totalFocusHours >= 10) await this.unlockAchievement('time_10h');
-        if (totalFocusHours >= 100) await this.unlockAchievement('time_100h');
-
-        // Verificar conquistas de tarefas
-        const totalTasks = this.currentUserData?.totalTasks || 0;
-        if (totalTasks >= 50) await this.unlockAchievement('task_warrior');
-        if (totalTasks >= 100) await this.unlockAchievement('task_master');
-
-        // Verificar conquistas de subtarefas
-        const totalSubtasks = this.currentUserData?.totalSubtasks || 0;
-        if (totalSubtasks >= 100) await this.unlockAchievement('subtask_master');
-
-        // Verificar conquistas de hiperfoco
-        const totalFocusSessions = this.currentUserData?.totalFocusSessions || 0;
-        if (totalFocusSessions >= 10) await this.unlockAchievement('focus_master');
-        if (totalFocusSessions >= 50) await this.unlockAchievement('focus_legend');
     }
 
-    private async unlockAchievement(achievementId: string): Promise<void> {
-        const achievement = this.achievements.find(a => a.id === achievementId);
-        if (achievement && !achievement.unlockedAt) {
-            achievement.unlockedAt = Date.now();
-            await this.addXP(achievement.xpReward);
-            vscode.window.showInformationMessage(
-                `🏆 Conquista Desbloqueada: ${achievement.title}! +${achievement.xpReward} XP`
-            );
+    private async checkSpecialAchievements(): Promise<void> {
+        if (!this.currentUserData) return;
+
+        try {
+            // Conquista de produtividade consistente
+            if (this.currentUserData.streak >= 7 && 
+                this.currentUserData.totalTasks >= 20 && 
+                this.currentUserData.totalFocusTime >= 10 * 60) {
+                await this.unlockAchievement('consistent_producer');
+            }
+
+            // Conquista de multitarefa
+            if (this.currentUserData.totalTasks >= 5 && 
+                this.currentUserData.totalSubtasks >= 20) {
+                await this.unlockAchievement('task_decomposer');
+            }
+
+            // Conquista de foco intenso
+            if (this.currentUserData.totalFocusSessions >= 5 && 
+                this.currentUserData.totalFocusTime >= 5 * 60) {
+                await this.unlockAchievement('deep_focus');
+            }
+
+            // Conquista de progresso rápido
+            const lastWeek = new Date();
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            if (this.currentUserData.lastTaskDate && 
+                this.currentUserData.lastTaskDate > lastWeek && 
+                this.currentUserData.totalTasks >= 10) {
+                await this.unlockAchievement('rapid_progress');
+            }
+        } catch (error) {
+            console.error('Erro ao verificar conquistas especiais:', error);
         }
     }
 
-    public async onTaskCompleted(xpEarned: number): Promise<void> {
-        const oldLevel = this.currentUserData!.level;
-        await this.addXP(xpEarned);
+    private async unlockAchievement(id: string): Promise<void> {
+        try {
+            if (!this.achievements.has(id)) {
+                throw new Error(`Conquista ${id} não encontrada`);
+            }
 
-        if (this.currentUserData!.level > oldLevel) {
-            await this.handleLevelUp();
+            this.achievements.add(id);
+            
+            // Adicionar XP
+            await this.addXP(this.getAchievementXp(id));
+
+            // Atualizar estatísticas
+            const unlockedAchievements = this.achievements.size;
+            const totalAchievements = this.achievements.size;
+            const completionRate = Math.round((unlockedAchievements / totalAchievements) * 100);
+
+            // Notificar usuário
+            const message = `🏆 Conquista Desbloqueada: ${this.getAchievementTitle(id)}!\n` +
+                          `+${this.getAchievementXp(id)} XP\n` +
+                          `Progresso: ${unlockedAchievements}/${totalAchievements} (${completionRate}%)`;
+
+            vscode.window.showInformationMessage(message, 'Ver Perfil').then(selection => {
+                if (selection === 'Ver Perfil') {
+                    this.showProfile();
+                }
+            });
+
+            // Salvar estado atualizado
+            await this.saveState();
+        } catch (error) {
+            console.error('Erro ao desbloquear conquista:', error);
+            vscode.window.showErrorMessage('Erro ao registrar conquista');
         }
+    }
 
-        // Mostrar notificação de XP
-        vscode.window.showInformationMessage(
-            `+${xpEarned} XP! Total: ${this.currentUserData!.xp_points}/${this.currentUserData!.xp_for_next_level}`
-        );
+    private getAchievementXp(id: string): number {
+        const xpRewards: { [key: string]: number } = {
+            'first_task': 100,
+            'task_warrior': 1000,
+            'task_master': 2000,
+            'focus_master': 500,
+            'focus_legend': 1500,
+            'early_bird': 300,
+            'night_owl': 300,
+            'streak_3': 400,
+            'streak_7': 1000,
+            'streak_30': 5000,
+            'subtask_master': 800,
+            'time_1h': 200,
+            'time_10h': 1000,
+            'time_100h': 5000,
+            'priority_king': 5000
+        };
+        return xpRewards[id] || 0;
+    }
 
-        this.updateStatusBar();
+    private getAchievementTitle(id: string): string {
+        const titles: { [key: string]: string } = {
+            'first_task': 'Primeira Tarefa',
+            'task_warrior': 'Guerreiro das Tarefas',
+            'task_master': 'Mestre das Tarefas',
+            'focus_master': 'Mestre do Foco',
+            'focus_legend': 'Lenda do Foco',
+            'early_bird': 'Madrugador',
+            'night_owl': 'Coruja Noturna',
+            'streak_3': 'Em Ritmo',
+            'streak_7': 'Em Chamas',
+            'streak_30': 'Incendiário',
+            'subtask_master': 'Mestre das Subtarefas',
+            'time_1h': 'Primeira Hora',
+            'time_10h': 'Dez Horas',
+            'time_100h': 'Centenário',
+            'priority_king': 'Rei das Prioridades'
+        };
+        return titles[id] || id;
     }
 
     private async addXP(amount: number): Promise<void> {
-        this.currentUserData!.xp_points += amount;
+        try {
+            if (!this.currentUserData) {
+                throw new Error('Dados do usuário não inicializados');
+            }
 
-        // Calcular novo nível
-        const newLevel = Math.floor(this.currentUserData!.xp_points / 100) + 1;
-        if (newLevel > this.currentUserData!.level) {
-            this.currentUserData!.level = newLevel;
-            this.currentUserData!.title = this.getLevelTitle(newLevel);
+            const oldLevel = this.currentUserData.level;
+            this.currentUserData.xp_points += amount;
+
+            // Calcular novo nível usando uma fórmula mais suave
+            const newLevel = Math.floor(Math.sqrt(this.currentUserData.xp_points / 100)) + 1;
+            
+            if (newLevel > this.currentUserData.level) {
+                this.currentUserData.level = newLevel;
+                this.currentUserData.title = this.getLevelTitle(newLevel);
+                
+                // Atualizar XP necessário para próximo nível
+                this.currentUserData.xp_for_next_level = Math.pow(newLevel, 2) * 100;
+
+                // Notificar level up
+                await this.handleLevelUp(oldLevel, newLevel);
+            }
+
+            // Salvar dados atualizados
+            await this.saveState();
+            this.updateStatusBar();
+        } catch (error) {
+            console.error('Erro ao adicionar XP:', error);
+            throw error;
         }
-
-        // Atualizar XP necessário para próximo nível
-        this.currentUserData!.xp_for_next_level = newLevel * 100;
-
-        // Salvar dados atualizados
-        await this.saveUserData();
     }
 
     private getLevelTitle(level: number): string {
@@ -392,21 +477,34 @@ export class GamificationManager {
         return 'Iniciante';
     }
 
-    private async handleLevelUp(): Promise<void> {
-        const levelUpReward = this.levelUpRewards.find(
-            reward => reward.level === this.currentUserData!.level
-        );
+    private async handleLevelUp(oldLevel: number, newLevel: number): Promise<void> {
+        try {
+            const levelUpReward = this.levelUpRewards.find(
+                reward => reward.level === newLevel
+            );
 
-        if (levelUpReward) {
-            // Mostrar notificação de level up
-            vscode.window.showInformationMessage(
-                `🎉 Parabéns! Você alcançou o nível ${this.currentUserData!.level}!`,
-                'Ver Recompensas'
-            ).then(selection => {
-                if (selection === 'Ver Recompensas') {
-                    this.showLevelUpRewards(levelUpReward);
-                }
-            });
+            if (levelUpReward) {
+                // Mostrar notificação de level up
+                const message = `🎉 Parabéns! Você subiu do nível ${oldLevel} para o nível ${newLevel}!`;
+                vscode.window.showInformationMessage(
+                    message,
+                    'Ver Recompensas',
+                    'Ignorar'
+                ).then(selection => {
+                    if (selection === 'Ver Recompensas') {
+                        this.showLevelUpRewards(levelUpReward);
+                    }
+                });
+
+                // Verificar conquistas relacionadas a níveis
+                if (newLevel >= 5) await this.unlockAchievement('level_5');
+                if (newLevel >= 10) await this.unlockAchievement('level_10');
+                if (newLevel >= 20) await this.unlockAchievement('level_20');
+                if (newLevel >= 30) await this.unlockAchievement('level_30');
+                if (newLevel >= 50) await this.unlockAchievement('level_50');
+            }
+        } catch (error) {
+            console.error('Erro ao processar level up:', error);
         }
     }
 
@@ -504,10 +602,10 @@ export class GamificationManager {
     }
 
     private getProfileContent(): string {
-        const { level, xp_points, xp_for_next_level, title, streak, totalFocusTime, totalTasks, totalSubtasks, totalFocusSessions } = this.currentUserData!;
+        const { level, xp_points, xp_for_next_level, title, streak, totalFocusTime, totalTasks, totalFocusSessions } = this.currentUserData!;
         const progress = Math.round((xp_points / xp_for_next_level) * 100);
-        const unlockedAchievements = this.achievements.filter(a => a.unlockedAt);
-        const lockedAchievements = this.achievements.filter(a => !a.unlockedAt);
+        const unlockedAchievements = Array.from(this.achievements);
+        const lockedAchievements = Array.from(this.achievements).filter(id => !this.achievements.has(id));
         const nextLevelReward = this.levelUpRewards.find(r => r.level > level);
 
         return `
@@ -685,11 +783,11 @@ export class GamificationManager {
                     <div class="achievements-grid">
                         ${unlockedAchievements.map(achievement => `
                             <div class="achievement-card">
-                                <div class="achievement-icon">${achievement.icon}</div>
+                                <div class="achievement-icon">${this.getAchievementIcon(achievement)}</div>
                                 <div class="achievement-info">
-                                    <h3 class="achievement-title">${achievement.title}</h3>
-                                    <p class="achievement-description">${achievement.description}</p>
-                                    <div class="achievement-xp">+${achievement.xpReward} XP</div>
+                                    <h3 class="achievement-title">${this.getAchievementTitle(achievement)}</h3>
+                                    <p class="achievement-description">${this.getAchievementDescription(achievement)}</p>
+                                    <div class="achievement-xp">+${this.getAchievementXp(achievement)} XP</div>
                                 </div>
                             </div>
                         `).join('')}
@@ -701,11 +799,11 @@ export class GamificationManager {
                     <div class="achievements-grid">
                         ${lockedAchievements.map(achievement => `
                             <div class="achievement-card achievement-locked">
-                                <div class="achievement-icon">${achievement.icon}</div>
+                                <div class="achievement-icon">${this.getAchievementIcon(achievement)}</div>
                                 <div class="achievement-info">
-                                    <h3 class="achievement-title">${achievement.title}</h3>
-                                    <p class="achievement-description">${achievement.description}</p>
-                                    <div class="achievement-xp">+${achievement.xpReward} XP</div>
+                                    <h3 class="achievement-title">${this.getAchievementTitle(achievement)}</h3>
+                                    <p class="achievement-description">${this.getAchievementDescription(achievement)}</p>
+                                    <div class="achievement-xp">+${this.getAchievementXp(achievement)} XP</div>
                                 </div>
                             </div>
                         `).join('')}
@@ -731,8 +829,127 @@ export class GamificationManager {
         `;
     }
 
+    private getAchievementIcon(id: string): string {
+        const icons: { [key: string]: string } = {
+            'first_task': '$(trophy)',
+            'task_warrior': '$(shield)',
+            'task_master': '$(crown)',
+            'focus_master': '$(zap)',
+            'focus_legend': '$(star)',
+            'early_bird': '$(sun)',
+            'night_owl': '$(moon)',
+            'streak_3': '$(flame)',
+            'streak_7': '$(flame)',
+            'streak_30': '$(flame)',
+            'subtask_master': '$(checklist)',
+            'time_1h': '$(clock)',
+            'time_10h': '$(clock)',
+            'time_100h': '$(clock)',
+            'priority_king': '$(crown)'
+        };
+        return icons[id] || '$(question)';
+    }
+
+    private getAchievementDescription(id: string): string {
+        const descriptions: { [key: string]: string } = {
+            'first_task': 'Complete sua primeira tarefa',
+            'task_warrior': 'Complete 50 tarefas',
+            'task_master': 'Complete 100 tarefas',
+            'focus_master': 'Complete 10 sessões de hiperfoco',
+            'focus_legend': 'Complete 50 sessões de hiperfoco',
+            'early_bird': 'Complete uma tarefa antes das 9h',
+            'night_owl': 'Complete uma tarefa após as 22h',
+            'streak_3': 'Mantenha um streak de 3 dias',
+            'streak_7': 'Mantenha um streak de 7 dias',
+            'streak_30': 'Mantenha um streak de 30 dias',
+            'subtask_master': 'Complete 100 subtarefas',
+            'time_1h': 'Acumule 1 hora de tempo focado',
+            'time_10h': 'Acumule 10 horas de tempo focado',
+            'time_100h': 'Acumule 100 horas de tempo focado',
+            'priority_king': 'Complete 5 tarefas urgentes'
+        };
+        return descriptions[id] || 'Descrição não disponível';
+    }
+
+    public async getUserData(): Promise<UserData> {
+        return this.currentUserData || {
+            level: 1,
+            xp_points: 0,
+            xp_for_next_level: 100,
+            title: 'Iniciante',
+            streak: 0,
+            totalFocusTime: 0,
+            totalTasks: 0,
+            totalSubtasks: 0,
+            totalFocusSessions: 0,
+            lastTaskDate: null
+        };
+    }
+
     public dispose(): void {
         this.disposables.forEach(d => d.dispose());
         this.statusBarItem.dispose();
     }
-} 
+
+    public async onTaskCompleted(task: Task): Promise<void> {
+        try {
+            if (!this.currentUserData) {
+                throw new Error('Dados do usuário não inicializados');
+            }
+
+            // Atualizar estatísticas básicas
+            this.currentUserData.totalTasks++;
+            this.currentUserData.totalSubtasks += task.subtasks.length;
+
+            // Atualizar streak
+            const today = new Date().toISOString().split('T')[0];
+            const lastTaskDate = this.currentUserData.lastTaskDate?.toISOString().split('T')[0];
+            
+            if (lastTaskDate === today) {
+                // Já completou uma tarefa hoje, não precisa atualizar o streak
+            } else if (!lastTaskDate || 
+                      new Date(today).getTime() - new Date(lastTaskDate).getTime() === 24 * 60 * 60 * 1000) {
+                // Última tarefa foi ontem, incrementar streak
+                this.currentUserData.streak++;
+            } else {
+                // Quebrou o streak
+                this.currentUserData.streak = 1;
+            }
+
+            // Atualizar última data de tarefa
+            this.currentUserData.lastTaskDate = new Date();
+
+            // Adicionar XP baseado na complexidade e prioridade da tarefa
+            const baseXP = 50;
+            const complexityMultiplier = task.priorityCriteria.complexity;
+            const priorityMultiplier = task.priority === TaskPriority.URGENT ? 2 :
+                                     task.priority === TaskPriority.HIGH ? 1.5 :
+                                     task.priority === TaskPriority.MEDIUM ? 1.2 : 1;
+
+            const xpGained = Math.round(baseXP * complexityMultiplier * priorityMultiplier);
+            await this.addXP(xpGained);
+
+            // Verificar conquistas específicas de tarefas
+            if (this.currentUserData.totalTasks === 1) {
+                await this.unlockAchievement('first_task');
+            }
+            if (this.currentUserData.totalTasks >= 50) {
+                await this.unlockAchievement('task_warrior');
+            }
+            if (this.currentUserData.totalTasks >= 100) {
+                await this.unlockAchievement('task_master');
+            }
+            if (this.currentUserData.totalSubtasks >= 100) {
+                await this.unlockAchievement('subtask_master');
+            }
+
+            // Salvar estado atualizado
+            await this.saveState();
+            this.updateStatusBar();
+
+        } catch (error) {
+            console.error('Erro ao processar tarefa completada:', error);
+            throw error;
+        }
+    }
+}

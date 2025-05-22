@@ -171,6 +171,59 @@
           "type": "boolean",
           "default": true,
           "description": "Ativar modo debug para ver logs detalhados"
+        },
+        "devHelper.logLevel": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
+          "default": "INFO",
+          "description": "Nível de log da extensão"
+        },
+        "devHelper.showLogNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar notificações para logs de aviso e erro"
+        },
+        "devHelper.logToFile": {
+          "type": "boolean",
+          "default": false,
+          "description": "Salvar logs em arquivo"
+        },
+        "devHelper.logFilePath": {
+          "type": "string",
+          "default": "${workspaceFolder}/.dev-helper/logs/extension.log",
+          "description": "Caminho do arquivo de log"
+        },
+        "devHelper.security": {
+          "type": "object",
+          "properties": {
+            "sanitizeInput": {
+              "type": "boolean",
+              "default": true,
+              "description": "Sanitizar entrada de dados"
+            },
+            "validateDates": {
+              "type": "boolean",
+              "default": true,
+              "description": "Validar datas"
+            },
+            "maxTaskTitleLength": {
+              "type": "number",
+              "default": 200,
+              "description": "Tamanho máximo do título da tarefa"
+            },
+            "maxTaskDescriptionLength": {
+              "type": "number",
+              "default": 1000,
+              "description": "Tamanho máximo da descrição da tarefa"
+            }
+          },
+          "default": {
+            "sanitizeInput": true,
+            "validateDates": true,
+            "maxTaskTitleLength": 200,
+            "maxTaskDescriptionLength": 1000
+          },
+          "description": "Configurações de segurança"
         }
       }
     }

@@ -131,28 +131,21 @@ export function sanitizeTask(task: unknown): Task | null {
     };
 }
 
-export function sanitizeForWebview(data: unknown): SanitizedData | SanitizedData[] | string | number | boolean {
-    if (Array.isArray(data)) {
-        return data.map(sanitizeForWebview) as SanitizedData[];
-    }
+/**
+ * Sanitiza texto para uso seguro em webview
+ * @param text Texto a ser sanitizado
+ * @returns Texto sanitizado
+ */
+export function sanitizeForWebview(text: string | undefined | null): string {
+    if (!text) return '';
     
-    if (data && typeof data === 'object') {
-        const sanitized: SanitizedData = {};
-        for (const [key, value] of Object.entries(data)) {
-            // Remover dados sensíveis
-            if (['createdBy', 'machineId', 'token'].includes(key)) {
-                continue;
-            }
-            sanitized[key] = sanitizeForWebview(value) as SanitizedData[keyof SanitizedData];
-        }
-        return sanitized;
-    }
-    
-    if (typeof data === 'string') {
-        return sanitizeHtml(data);
-    }
-    
-    return data as string | number | boolean;
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+        .replace(/\n/g, '<br>');
 }
 
 /**
@@ -249,4 +242,113 @@ export function validateUserInput(input: string, config: Partial<SecurityConfig>
     }
 
     return { isValid: true };
+}
+
+/**
+ * Valida e sanitiza um número
+ * @param value Valor a ser validado
+ * @param min Valor mínimo permitido
+ * @param max Valor máximo permitido
+ * @param defaultValue Valor padrão caso inválido
+ * @returns Número validado
+ */
+export function validateNumber(value: unknown, min: number, max: number, defaultValue: number): number {
+    const num = Number(value);
+    if (isNaN(num) || num < min || num > max) {
+        return defaultValue;
+    }
+    return num;
+}
+
+/**
+ * Valida e sanitiza uma data
+ * @param date Data a ser validada
+ * @returns Data validada ou null se inválida
+ */
+export function validateDate(date: unknown): Date | null {
+    if (!date) return null;
+    
+    try {
+        const parsedDate = new Date(date as string);
+        if (isNaN(parsedDate.getTime())) {
+            return null;
+        }
+        return parsedDate;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Valida e sanitiza um objeto de tarefa
+ * @param task Objeto de tarefa a ser validado
+ * @returns Objeto de tarefa validado ou null se inválido
+ */
+export function validateTask(task: unknown): any {
+    if (!task || typeof task !== 'object') return null;
+    
+    const validatedTask = {
+        id: validateNumber((task as any).id, 0, Number.MAX_SAFE_INTEGER, 0),
+        title: sanitizeForWebview((task as any).title),
+        description: sanitizeForWebview((task as any).description),
+        status: (task as any).status || 'NOT_STARTED',
+        priority: (task as any).priority || 'MEDIUM',
+        priorityCriteria: {
+            complexity: validateNumber((task as any).priorityCriteria?.complexity, 1, 5, 3),
+            impact: validateNumber((task as any).priorityCriteria?.impact, 1, 5, 3),
+            estimatedTime: validateNumber((task as any).priorityCriteria?.estimatedTime, 0, 1440, 30),
+            deadline: validateDate((task as any).priorityCriteria?.deadline)
+        },
+        createdAt: validateDate((task as any).createdAt),
+        completedAt: validateDate((task as any).completedAt)
+    };
+
+    return validatedTask;
+}
+
+/**
+ * Valida e sanitiza uma mensagem do webview
+ * @param message Mensagem a ser validada
+ * @returns Mensagem validada ou null se inválida
+ */
+export function validateWebviewMessage(message: unknown): any {
+    if (!message || typeof message !== 'object') return null;
+    
+    const msg = message as any;
+    if (msg.type !== 'update') return null;
+
+    return {
+        type: msg.type,
+        tasks: Array.isArray(msg.tasks) ? msg.tasks.map(validateTask).filter(Boolean) : [],
+        hyperfocus: {
+            todayMinutes: validateNumber(msg.hyperfocus?.todayMinutes, 0, 1440, 0),
+            isActive: Boolean(msg.hyperfocus?.isActive)
+        },
+        productivity: {
+            dailyStats: Array.isArray(msg.productivity?.dailyStats) 
+                ? msg.productivity.dailyStats.map((stat: any) => ({
+                    tasksCompleted: validateNumber(stat.tasksCompleted, 0, 1000, 0),
+                    taskCompletionRate: validateNumber(stat.taskCompletionRate, 0, 1, 0),
+                    mostProductiveHour: validateNumber(stat.mostProductiveHour, 0, 23, 0),
+                    averageTaskDuration: validateNumber(stat.averageTaskDuration, 0, 1440, 0),
+                    totalFocusTime: validateNumber(stat.totalFocusTime, 0, 1440, 0)
+                }))
+                : [],
+            monthlyStats: Array.isArray(msg.productivity?.monthlyStats)
+                ? msg.productivity.monthlyStats.map((stat: any) => ({
+                    bestDay: validateDate(stat.bestDay),
+                    totalFocusTime: validateNumber(stat.totalFocusTime, 0, 43200, 0)
+                }))
+                : [],
+            insights: Array.isArray(msg.productivity?.insights)
+                ? msg.productivity.insights.map((insight: any) => ({
+                    type: ['productivity_trend', 'streak', 'focus_time', 'efficiency'].includes(insight.type)
+                        ? insight.type
+                        : 'productivity_trend',
+                    message: sanitizeForWebview(insight.message),
+                    date: validateDate(insight.date)
+                }))
+                : []
+        }
+    };
 } 

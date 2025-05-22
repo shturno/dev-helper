@@ -16,45 +16,52 @@ export class PriorityManager {
      * Calcula a prioridade de uma tarefa baseado em seus critérios
      */
     public calculatePriority(criteria: PriorityCriteria): TaskPriority {
+        // Garantir que o objeto tenha todas as propriedades necessárias
+        const fullCriteria: PriorityCriteria = {
+            complexity: criteria.complexity,
+            impact: criteria.impact,
+            estimatedTime: criteria.estimatedTime,
+            deadline: criteria.deadline,
+            dependencies: criteria.dependencies || []
+        };
+
         let score = 0;
 
         // Pontuação baseada na complexidade (1-5)
-        score += criteria.complexity * 2;
+        score += fullCriteria.complexity * 1;
 
         // Pontuação baseada no impacto (1-5)
-        score += criteria.impact * 3;
+        score += fullCriteria.impact * 1.5;
 
         // Pontuação baseada no tempo estimado
         // Tarefas mais longas têm prioridade menor
-        const timeScore = Math.max(0, 5 - Math.floor(criteria.estimatedTime / 60));
+        const timeScore = Math.max(0, 2 - Math.floor(fullCriteria.estimatedTime / 120));
         score += timeScore;
 
         // Pontuação baseada em dependências
-        // Tarefas com mais dependências têm prioridade maior
-        score += Math.min(criteria.dependencies.length, 5);
+        score += Math.min(fullCriteria.dependencies.length, 3);
 
         // Pontuação baseada no prazo
-        if (criteria.deadline) {
+        if (fullCriteria.deadline) {
             const now = new Date();
-            const daysUntilDeadline = Math.ceil((criteria.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            
+            const daysUntilDeadline = Math.ceil((fullCriteria.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             if (daysUntilDeadline <= 0) {
                 score += 10; // Tarefa vencida
             } else if (daysUntilDeadline <= 1) {
-                score += 8; // Prazo de 1 dia
+                score += 5; // Prazo de 1 dia
             } else if (daysUntilDeadline <= 3) {
-                score += 6; // Prazo de 3 dias
+                score += 3; // Prazo de 3 dias
             } else if (daysUntilDeadline <= 7) {
-                score += 4; // Prazo de 1 semana
+                score += 1; // Prazo de 1 semana
             } else if (daysUntilDeadline <= 14) {
-                score += 2; // Prazo de 2 semanas
+                score += 0.5; // Prazo de 2 semanas
             }
         }
 
         // Converter pontuação em prioridade
-        if (score >= 20) return TaskPriority.URGENT;
-        if (score >= 15) return TaskPriority.HIGH;
-        if (score >= 10) return TaskPriority.MEDIUM;
+        if (score >= 13) return TaskPriority.URGENT;
+        if (score >= 10) return TaskPriority.HIGH;
+        if (score >= 7) return TaskPriority.MEDIUM;
         return TaskPriority.LOW;
     }
 
@@ -108,11 +115,11 @@ export class PriorityManager {
         deadline?: Date
     ): PriorityCriteria {
         return {
-            deadline,
             complexity: Math.min(Math.max(complexity, 1), 5),
             impact: Math.min(Math.max(impact, 1), 5),
-            dependencies: [],
-            estimatedTime: Math.max(estimatedTime, 0)
+            estimatedTime: Math.max(estimatedTime, 0),
+            deadline,
+            dependencies: []
         };
     }
 } 

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 export interface HyperfocusContext {
-    reason: 'manual' | 'complex_file' | 'peak_time';
+    reason: 'manual' | 'complex_file' | 'peak_time' | 'restore';
     complexity?: number;
     fileName?: string;
 }
@@ -27,24 +27,24 @@ export class HyperfocusManager {
         lastSessionDate: null as Date | null
     };
 
-    private constructor() {
+    private constructor(private context: vscode.ExtensionContext) {
         this.config = vscode.workspace.getConfiguration('tdahDevHelper');
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
-            100
+            97
         );
-        this.statusBarItem.command = 'tdah-dev-helper.stopFocus';
+        this.statusBarItem.command = 'dev-helper.stopFocus';
         this.loadStats();
     }
 
-    public static getInstance(): HyperfocusManager {
+    public static getInstance(context: vscode.ExtensionContext): HyperfocusManager {
         if (!HyperfocusManager.instance) {
-            HyperfocusManager.instance = new HyperfocusManager();
+            HyperfocusManager.instance = new HyperfocusManager(context);
         }
         return HyperfocusManager.instance;
     }
 
-    public initialize(): void {
+    public async initialize(): Promise<void> {
         // Configurar status bar
         this.statusBarItem.text = '$(eye) TDAH: Modo Hiperfoco';
         this.statusBarItem.tooltip = 'Clique para desativar o modo hiperfoco';
@@ -54,11 +54,50 @@ export class HyperfocusManager {
         this.disposables.push(
             vscode.window.onDidChangeWindowState(this.handleWindowStateChange.bind(this))
         );
+
+        // Registrar comando para parar hiperfoco
+        this.disposables.push(
+            vscode.commands.registerCommand('dev-helper.stopFocus', async () => {
+                await this.deactivateHyperfocus();
+            })
+        );
+
+        // Verificar se há uma sessão ativa pendente
+        const lastSession = this.context.globalState.get<{startTime: number}>('hyperfocus-last-session');
+        if (lastSession && lastSession.startTime) {
+            const sessionDuration = Date.now() - lastSession.startTime;
+            if (sessionDuration < 4 * 60 * 60 * 1000) { // 4 horas
+                const shouldRestore = await vscode.window.showWarningMessage(
+                    'Uma sessão de hiperfoco anterior foi interrompida. Deseja restaurá-la?',
+                    'Sim',
+                    'Não'
+                );
+                if (shouldRestore === 'Sim') {
+                    await this.activateHyperfocus({ reason: 'restore', complexity: 0 });
+                } else {
+                    await this.context.globalState.update('hyperfocus-last-session', null);
+                }
+            } else {
+                await this.context.globalState.update('hyperfocus-last-session', null);
+            }
+        }
     }
 
     public dispose(): void {
+        // Limpar todos os disposables
         this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+
+        // Esconder e limpar status bar
+        this.statusBarItem.hide();
         this.statusBarItem.dispose();
+
+        // Se estiver ativo, desativar o modo hiperfoco
+        if (this.isActive) {
+            this.deactivateHyperfocus().catch(error => {
+                console.error('Erro ao desativar hiperfoco durante dispose:', error);
+            });
+        }
     }
 
     private loadStats(): void {
@@ -253,10 +292,14 @@ export class HyperfocusManager {
         this.originalSettings = null;
     }
 
-    private handleWindowStateChange(e: vscode.WindowState): void {
-        // Desativar hiperfoco se a janela perder o foco
-        if (this.isActive && !e.focused) {
-            this.deactivateHyperfocus();
+    private async handleWindowStateChange(state: vscode.WindowState): Promise<void> {
+        if (this.isActive && !state.focused) {
+            // Salvar estado da sessão atual
+            if (this.startTime) {
+                await this.context.globalState.update('hyperfocus-last-session', {
+                    startTime: this.startTime
+                });
+            }
         }
     }
 
@@ -268,6 +311,8 @@ export class HyperfocusManager {
                 return `Arquivo complexo detectado (${context.fileName})`;
             case 'peak_time':
                 return 'Horário de pico de produtividade';
+            case 'restore':
+                return 'Restaurando sessão anterior';
             default:
                 return '';
         }
@@ -287,5 +332,22 @@ export class HyperfocusManager {
             return `${hours}h ${mins}m`;
         }
         return `${mins} minutos`;
+    }
+
+    public async startHyperfocus(): Promise<void> {
+        if (this.isActive) {
+            return;
+        }
+        this.isActive = true;
+        this.stats.todayMinutes = 0;
+        // Implementar lógica de início do hiperfoco
+    }
+
+    public async stopHyperfocus(): Promise<void> {
+        if (!this.isActive) {
+            return;
+        }
+        this.isActive = false;
+        // Implementar lógica de parada do hiperfoco
     }
 } 
