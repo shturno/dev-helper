@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+// import { Logger } from '../utils/logger';
 
 export interface BlockedNotification {
     type: 'info' | 'warning' | 'error' | 'blocked';
@@ -19,10 +20,10 @@ export class NotificationBlocker {
     private statusBarItem: vscode.StatusBarItem;
     private isInitialized: boolean = false;
 
-    constructor(private context: vscode.ExtensionContext) {
+    public constructor(_context: vscode.ExtensionContext) {
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
-            99
+            100
         );
         this.statusBarItem.text = '$(bell-slash) Notificações Bloqueadas';
         this.statusBarItem.tooltip = 'Clique para ver notificações bloqueadas';
@@ -34,11 +35,9 @@ export class NotificationBlocker {
                 this.showBlockedNotifications();
             })
         );
-        
-        this.initialize();
     }
 
-    public initialize(): void {
+    public async initialize(): Promise<void> {
         if (this.isInitialized) return;
         this.isInitialized = true;
 
@@ -96,6 +95,9 @@ export class NotificationBlocker {
                 vscode.window.showErrorMessage = originalShowError;
             }
         });
+
+        // Inicialização do NotificationBlocker
+        this.loadBlockedNotifications();
     }
 
     public dispose(): void {
@@ -152,9 +154,18 @@ export class NotificationBlocker {
         panel.webview.html = this.getWebviewContent(message);
     }
 
-    private updateStatusBar(): void {
-        const count = this.blockedNotifications.length;
-        this.statusBarItem.text = `$(bell-slash) ${count} Notificação${count !== 1 ? 's' : ''} Bloqueada${count !== 1 ? 's' : ''}`;
+    public blockNotification(message: string): boolean {
+        if (!this.isBlocking || !message) {
+            return false;
+        }
+        const notification: BlockedNotification = {
+            type: 'blocked',
+            message,
+            timestamp: Date.now(),
+        };
+        this.blockedNotifications.push(notification);
+        this.updateStatusBar();
+        return true;
     }
 
     private formatTimestamp(timestamp: number): string {
@@ -186,18 +197,6 @@ export class NotificationBlocker {
                         color: var(--vscode-descriptionForeground);
                         font-size: 0.9em;
                     }
-                    .clear-button {
-                        margin-top: 20px;
-                        padding: 8px 16px;
-                        background-color: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                    }
-                    .clear-button:hover {
-                        background-color: var(--vscode-button-hoverBackground);
-                    }
                 </style>
             </head>
             <body>
@@ -209,32 +208,17 @@ export class NotificationBlocker {
                         </div>
                     `).join('')}
                 </div>
-                <button class="clear-button" onclick="clearNotifications()">
-                    Limpar Notificações
-                </button>
-                <script>
-                    const vscode = acquireVsCodeApi();
-                    function clearNotifications() {
-                        vscode.postMessage({ command: 'clearNotifications' });
-                    }
-                </script>
             </body>
             </html>
         `;
     }
 
-    public blockNotification(message: string): boolean {
-        if (!this.isBlocking || !message) {
-            return false;
-        }
+    private loadBlockedNotifications(): void {
+        // Implementação futura se necessário
+    }
 
-        const notification: BlockedNotification = {
-            type: 'blocked',
-            message,
-            timestamp: Date.now()
-        };
-
-        this.blockedNotifications.push(notification);
-        return true;
+    private updateStatusBar(): void {
+        const count = this.blockedNotifications.length;
+        this.statusBarItem.text = `$(bell-slash) ${count} Notificação${count !== 1 ? 's' : ''} Bloqueada${count !== 1 ? 's' : ''}`;
     }
 } 

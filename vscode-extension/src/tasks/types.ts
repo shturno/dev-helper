@@ -32,6 +32,22 @@ export interface Subtask {
     completedAt?: Date;
 }
 
+export interface Tag {
+    id: string;
+    name: string;
+    color: string;
+    description?: string;
+}
+
+export interface Category {
+    id: string;
+    name: string;
+    description?: string;
+    color: string;
+    icon?: string;
+    parentId?: string;
+}
+
 export interface Task {
     id: number;
     title: string;
@@ -45,7 +61,8 @@ export interface Task {
     actualTime?: number;
     parentTaskId?: number;
     subtasks: Subtask[];
-    tags: string[];
+    tags: Tag[];
+    category?: Category;
     priorityCriteria: PriorityCriteria;
     focusSessions?: FocusSession[];
     xpReward?: number;

@@ -19,10 +19,19 @@ jest.mock('vscode', () => ({
 }));
 
 describe('NotificationBlocker', () => {
-    let notificationBlocker: NotificationBlocker;
+    let blocker: NotificationBlocker;
+    let mockContext: vscode.ExtensionContext;
     let mockStatusBarItem: vscode.StatusBarItem;
 
     beforeEach(() => {
+        mockContext = {
+            globalState: {
+                get: jest.fn(),
+                update: jest.fn()
+            },
+            subscriptions: []
+        } as unknown as vscode.ExtensionContext;
+
         jest.clearAllMocks();
         mockStatusBarItem = {
             show: jest.fn(),
@@ -33,52 +42,52 @@ describe('NotificationBlocker', () => {
         } as unknown as vscode.StatusBarItem;
 
         (vscode.window.createStatusBarItem as jest.Mock).mockReturnValue(mockStatusBarItem);
-        notificationBlocker = new NotificationBlocker();
+        blocker = new NotificationBlocker(mockContext);
     });
 
     afterEach(() => {
-        notificationBlocker.dispose();
+        blocker.dispose();
     });
 
     describe('startBlocking', () => {
         it('should start blocking notifications and show status bar item', () => {
-            notificationBlocker.startBlocking();
+            blocker.startBlocking();
             expect(mockStatusBarItem.show).toHaveBeenCalled();
             expect(mockStatusBarItem.text).toContain('🔕');
             expect(mockStatusBarItem.tooltip).toContain('Notificações bloqueadas');
         });
 
         it('should not start blocking if already blocking', () => {
-            notificationBlocker.startBlocking();
+            blocker.startBlocking();
             const initialShowCalls = (mockStatusBarItem.show as jest.Mock).mock.calls.length;
             
-            notificationBlocker.startBlocking();
+            blocker.startBlocking();
             expect(mockStatusBarItem.show).toHaveBeenCalledTimes(initialShowCalls);
         });
     });
 
     describe('stopBlocking', () => {
         it('should stop blocking notifications and hide status bar item', () => {
-            notificationBlocker.startBlocking();
-            notificationBlocker.stopBlocking();
+            blocker.startBlocking();
+            blocker.stopBlocking();
             
             expect(mockStatusBarItem.hide).toHaveBeenCalled();
         });
 
         it('should not stop blocking if not blocking', () => {
-            notificationBlocker.stopBlocking();
+            blocker.stopBlocking();
             expect(mockStatusBarItem.hide).not.toHaveBeenCalled();
         });
 
         it('should show blocked notifications when stopping', () => {
             // Simular algumas notificações bloqueadas
-            (notificationBlocker as any).blockedNotifications = [
+            (blocker as any).blockedNotifications = [
                 { message: 'Test notification 1' },
                 { message: 'Test notification 2' }
             ];
 
-            notificationBlocker.startBlocking();
-            notificationBlocker.stopBlocking();
+            blocker.startBlocking();
+            blocker.stopBlocking();
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('2 notificações bloqueadas'),
@@ -89,32 +98,32 @@ describe('NotificationBlocker', () => {
 
     describe('blockNotification', () => {
         it('should block notification when blocking is active', () => {
-            notificationBlocker.startBlocking();
+            blocker.startBlocking();
             const message = 'Test notification';
-            const shouldBlock = notificationBlocker.blockNotification(message);
+            const shouldBlock = blocker.blockNotification(message);
             expect(shouldBlock).toBe(true);
-            expect((notificationBlocker as any).blockedNotifications[0].message).toBe(message);
+            expect((blocker as any).blockedNotifications[0].message).toBe(message);
         });
 
         it('should not block notification when blocking is inactive', () => {
             const message = 'Test notification';
-            const shouldBlock = notificationBlocker.blockNotification(message);
+            const shouldBlock = blocker.blockNotification(message);
             expect(shouldBlock).toBe(false);
-            expect((notificationBlocker as any).blockedNotifications).toHaveLength(0);
+            expect((blocker as any).blockedNotifications).toHaveLength(0);
         });
 
         it('should not block empty notifications', () => {
-            notificationBlocker.startBlocking();
+            blocker.startBlocking();
             const message = '';
-            const shouldBlock = notificationBlocker.blockNotification(message);
+            const shouldBlock = blocker.blockNotification(message);
             expect(shouldBlock).toBe(false);
-            expect((notificationBlocker as any).blockedNotifications).toHaveLength(0);
+            expect((blocker as any).blockedNotifications).toHaveLength(0);
         });
     });
 
     describe('showBlockedNotifications', () => {
         it('should show message when no notifications are blocked', () => {
-            notificationBlocker.showBlockedNotifications();
+            blocker.showBlockedNotifications();
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 'Nenhuma notificação bloqueada'
             );
@@ -122,12 +131,12 @@ describe('NotificationBlocker', () => {
 
         it('should show blocked notifications in a list', () => {
             // Simular algumas notificações bloqueadas
-            (notificationBlocker as any).blockedNotifications = [
+            (blocker as any).blockedNotifications = [
                 { message: 'Test notification 1' },
                 { message: 'Test notification 2' }
             ];
 
-            notificationBlocker.showBlockedNotifications();
+            blocker.showBlockedNotifications();
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Notificações bloqueadas'),
                 'Test notification 1',
@@ -136,28 +145,28 @@ describe('NotificationBlocker', () => {
         });
 
         it('should clear blocked notifications after showing', () => {
-            (notificationBlocker as any).blockedNotifications = [
+            (blocker as any).blockedNotifications = [
                 { message: 'Test notification' }
             ];
 
-            notificationBlocker.showBlockedNotifications();
-            expect((notificationBlocker as any).blockedNotifications).toHaveLength(0);
+            blocker.showBlockedNotifications();
+            expect((blocker as any).blockedNotifications).toHaveLength(0);
         });
     });
 
     describe('dispose', () => {
         it('should dispose status bar item', () => {
-            notificationBlocker.dispose();
+            blocker.dispose();
             expect(mockStatusBarItem.dispose).toHaveBeenCalled();
         });
 
         it('should clear blocked notifications', () => {
-            (notificationBlocker as any).blockedNotifications = [
+            (blocker as any).blockedNotifications = [
                 { message: 'Test notification' }
             ];
 
-            notificationBlocker.dispose();
-            expect((notificationBlocker as any).blockedNotifications).toHaveLength(0);
+            blocker.dispose();
+            expect((blocker as any).blockedNotifications).toHaveLength(0);
         });
     });
 }); 

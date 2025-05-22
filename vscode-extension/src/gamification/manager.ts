@@ -67,11 +67,11 @@ export class GamificationManager {
             if (savedData) {
                 this.currentUserData = savedData;
             } else {
-                // Inicializar com dados padrão
-                this.currentUserData = {
-                    level: 1,
-                    xp_points: 0,
-                    xp_for_next_level: 100,
+        // Inicializar com dados padrão
+        this.currentUserData = {
+            level: 1,
+            xp_points: 0,
+            xp_for_next_level: 100,
                     title: 'Iniciante',
                     streak: 0,
                     totalFocusTime: 0,
@@ -246,7 +246,7 @@ export class GamificationManager {
                 {
                     id: 'night_owl',
                     condition: () => {
-                        const hour = new Date().getHours();
+        const hour = new Date().getHours();
                         return hour >= 22 || hour < 5;
                     }
                 },
@@ -452,8 +452,8 @@ export class GamificationManager {
             if (newLevel > this.currentUserData.level) {
                 this.currentUserData.level = newLevel;
                 this.currentUserData.title = this.getLevelTitle(newLevel);
-                
-                // Atualizar XP necessário para próximo nível
+
+        // Atualizar XP necessário para próximo nível
                 this.currentUserData.xp_for_next_level = Math.pow(newLevel, 2) * 100;
 
                 // Notificar level up
@@ -479,22 +479,22 @@ export class GamificationManager {
 
     private async handleLevelUp(oldLevel: number, newLevel: number): Promise<void> {
         try {
-            const levelUpReward = this.levelUpRewards.find(
+        const levelUpReward = this.levelUpRewards.find(
                 reward => reward.level === newLevel
-            );
+        );
 
-            if (levelUpReward) {
-                // Mostrar notificação de level up
+        if (levelUpReward) {
+            // Mostrar notificação de level up
                 const message = `🎉 Parabéns! Você subiu do nível ${oldLevel} para o nível ${newLevel}!`;
-                vscode.window.showInformationMessage(
+            vscode.window.showInformationMessage(
                     message,
                     'Ver Recompensas',
                     'Ignorar'
-                ).then(selection => {
-                    if (selection === 'Ver Recompensas') {
-                        this.showLevelUpRewards(levelUpReward);
-                    }
-                });
+            ).then(selection => {
+                if (selection === 'Ver Recompensas') {
+                    this.showLevelUpRewards(levelUpReward);
+                }
+            });
 
                 // Verificar conquistas relacionadas a níveis
                 if (newLevel >= 5) await this.unlockAchievement('level_5');
@@ -772,9 +772,9 @@ export class GamificationManager {
                     <div class="section-title">Progresso para o Próximo Nível</div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: ${progress}%"></div>
-                    </div>
-                    <div style="text-align: center">
-                        ${xp_points}/${xp_for_next_level} XP (${progress}%)
+                </div>
+                <div style="text-align: center">
+                    ${xp_points}/${xp_for_next_level} XP (${progress}%)
                     </div>
                 </div>
 
@@ -952,4 +952,4 @@ export class GamificationManager {
             throw error;
         }
     }
-}
+} 

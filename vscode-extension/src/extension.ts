@@ -9,15 +9,17 @@ import { TaskPriority } from './tasks/types';
 import { Logger } from './utils/logger';
 import { validateWebviewMessage } from './utils/security';
 import { AnalysisManager } from './analysis/manager';
+import { TagManager } from './tasks/tag-manager';
 
 // Componentes globais para gerenciamento de estado
 let apiClient: ApiClient | null = null;
 let hyperfocusManager: HyperfocusManager | null = null;
 let notificationBlocker: NotificationBlocker | null = null;
 let taskTracker: TaskTracker | null = null;
-let dashboardView: DashboardView | null = null;
+let dashboardView: vscode.WebviewViewProvider | null = null;
 let gamificationManager: GamificationManager | null = null;
 let logger: Logger;
+let tagManager: TagManager | null = null;
 
 // IDs dos comandos
 const COMMANDS = {
@@ -30,13 +32,38 @@ const COMMANDS = {
     moveTaskUp: 'dev-helper.moveTaskUp',
     moveTaskDown: 'dev-helper.moveTaskDown',
     setTaskPriority: 'dev-helper.setTaskPriority',
-    reorderTasks: 'dev-helper.reorderTasks'
+    reorderTasks: 'dev-helper.reorderTasks',
+    // Comandos de tags e categorias
+    createTag: 'dev-helper.createTag',
+    editTag: 'dev-helper.editTag',
+    deleteTag: 'dev-helper.deleteTag',
+    createCategory: 'dev-helper.createCategory',
+    editCategory: 'dev-helper.editCategory',
+    deleteCategory: 'dev-helper.deleteCategory',
+    manageTags: 'dev-helper.manageTags',
+    manageCategories: 'dev-helper.manageCategories',
+    addTagToTask: 'dev-helper.addTagToTask',
+    setTaskCategory: 'dev-helper.setTaskCategory'
 };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     try {
-        // Inicializar logger
+        // Inicializar componentes
+        apiClient = new ApiClient();
+        hyperfocusManager = HyperfocusManager.getInstance(context);
+        notificationBlocker = new NotificationBlocker(context);
+        taskTracker = TaskTracker.getInstance(context);
+        tagManager = TagManager.getInstance(context);
+        gamificationManager = GamificationManager.getInstance(context);
         logger = Logger.getInstance();
+
+        // Registrar provider do dashboard
+        const dashboardProvider = new DashboardView(taskTracker, hyperfocusManager, AnalysisManager.getInstance(context), context);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider('dev-helper.dashboard', dashboardProvider)
+        );
+        dashboardView = dashboardProvider;
+
         logger.info('Iniciando ativação da extensão...');
 
         // Limpar o contexto anterior
@@ -44,37 +71,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         context.subscriptions.length = 0;
 
         logger.debug('Inicializando HyperfocusManager...');
-        hyperfocusManager = HyperfocusManager.getInstance(context);
         await hyperfocusManager.initialize();
         logger.info('HyperfocusManager inicializado');
 
         logger.debug('Inicializando NotificationBlocker...');
-        notificationBlocker = new NotificationBlocker(context);
+        await notificationBlocker.initialize();
         logger.info('NotificationBlocker inicializado');
 
         logger.debug('Inicializando TaskTracker...');
-        taskTracker = TaskTracker.getInstance(context);
+        await taskTracker.initialize();
         logger.info('TaskTracker inicializado');
 
         logger.debug('Inicializando GamificationManager...');
-        gamificationManager = GamificationManager.getInstance(context);
         await gamificationManager.initialize();
         logger.info('GamificationManager inicializado');
 
         // Inicializar o DashboardView
         if (hyperfocusManager && taskTracker) {
             logger.debug('Inicializando DashboardView...');
-            const analysisManager = AnalysisManager.getInstance(context);
-            dashboardView = DashboardView.getInstance(taskTracker, hyperfocusManager, analysisManager);
             logger.info('DashboardView inicializado');
-
-            // Registrar o provider da view do dashboard
-            context.subscriptions.push(
-                vscode.window.registerWebviewViewProvider(
-                    'dev-helper.dashboard',
-                    dashboardView
-                )
-            );
         }
 
         // Inicializar componentes opcionais baseados na configuração
@@ -91,7 +106,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         if (apiUrl) {
             try {
-                apiClient = new ApiClient(apiUrl);
                 logger.info('API Client inicializado com sucesso');
             } catch (error) {
                 logger.error('Erro ao inicializar API:', error as Error);
@@ -227,6 +241,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     logger.error('Erro ao reordenar tarefas:', error as Error);
                     vscode.window.showErrorMessage('Erro ao reordenar tarefas');
                 }
+            }),
+
+            // Registrar comandos de tags e categorias
+            vscode.commands.registerCommand(COMMANDS.createTag, () => {
+                tagManager?.createTag();
+            }),
+            vscode.commands.registerCommand(COMMANDS.editTag, (tag) => {
+                tagManager?.editTag(tag);
+            }),
+            vscode.commands.registerCommand(COMMANDS.deleteTag, (tag) => {
+                tagManager?.deleteTag(tag);
+            }),
+            vscode.commands.registerCommand(COMMANDS.createCategory, () => {
+                tagManager?.createCategory();
+            }),
+            vscode.commands.registerCommand(COMMANDS.editCategory, (category) => {
+                tagManager?.editCategory(category);
+            }),
+            vscode.commands.registerCommand(COMMANDS.deleteCategory, (category) => {
+                tagManager?.deleteCategory(category);
+            }),
+            vscode.commands.registerCommand(COMMANDS.manageTags, () => {
+                if (dashboardView) {
+                    (dashboardView as any).showTagManagement();
+                }
+            }),
+            vscode.commands.registerCommand(COMMANDS.manageCategories, () => {
+                if (dashboardView) {
+                    (dashboardView as any).showCategoryManagement();
+                }
             })
         ];
 
@@ -244,7 +288,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     apiClient.dispose();
                 }
                 if (dashboardView) {
-                    dashboardView.dispose();
+                    (dashboardView as DashboardView).dispose();
                 }
                 if (notificationBlocker) {
                     notificationBlocker.dispose();
@@ -272,10 +316,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export function deactivate(): void {
     // A limpeza é feita através dos disposables no contexto
     logger?.info('Extensão desativada');
-}
+    }
 
 const updateDashboard = () => {
     if (dashboardView) {
-        dashboardView.update();
+        (dashboardView as DashboardView).update();
     }
 };

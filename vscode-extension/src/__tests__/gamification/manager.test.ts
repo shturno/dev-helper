@@ -46,23 +46,31 @@ describe('GamificationManager', () => {
         // Mock do contexto
         mockContext = createMockContext();
         
-        // Mock dos dados do usuário
+        // Estado mutável para simular o globalState
+        let gamificationData = {
+            level: 1,
+            xp_points: 0,
+            xp_for_next_level: 100,
+            title: 'Iniciante',
+            achievements: [],
+            totalTasks: 0,
+            totalSubtasks: 0,
+            totalFocusTime: 0,
+            streak: 0,
+            lastTaskDate: null
+        };
         (mockContext.globalState.get as jest.Mock).mockImplementation((key) => {
             if (key === 'dev-helper-gamification-data') {
-                return {
-                    level: 1,
-                    xp_points: 0,
-                    xp_for_next_level: 100,
-                    title: 'Iniciante',
-                    achievements: [],
-                    totalTasks: 0,
-                    totalSubtasks: 0,
-                    totalFocusTime: 0,
-                    streak: 0,
-                    lastTaskDate: null
-                };
+                // Retorna uma cópia para simular atualização
+                return { ...gamificationData, achievements: [...gamificationData.achievements] };
             }
             return null;
+        });
+        (mockContext.globalState.update as jest.Mock).mockImplementation((key, value) => {
+            if (key === 'dev-helper-gamification-data') {
+                gamificationData = { ...value, achievements: Array.isArray(value.achievements) ? [...value.achievements] : [] };
+            }
+            return Promise.resolve();
         });
     });
 
@@ -114,7 +122,7 @@ describe('GamificationManager', () => {
                 totalSubtasks: 25,
                 totalFocusTime: 3600,
                 streak: 3,
-                lastTaskDate: new Date().toISOString()
+                lastTaskDate: new Date()
             };
 
             (mockContext.globalState.get as jest.Mock).mockReturnValue(existingData);
@@ -122,7 +130,10 @@ describe('GamificationManager', () => {
             await gamificationManager.initialize();
 
             const userData = await gamificationManager.getUserData();
-            expect(userData).toEqual(existingData);
+            expect(userData).toEqual(expect.objectContaining({
+                ...existingData,
+                lastTaskDate: expect.any(Date)
+            }));
         });
     });
 
@@ -238,7 +249,7 @@ describe('GamificationManager', () => {
                 totalSubtasks: 0,
                 totalFocusTime: 0,
                 streak: 1,
-                lastTaskDate: yesterday.toISOString()
+                lastTaskDate: yesterday
             });
 
             gamificationManager = await GamificationManager.getInstance(mockContext);
@@ -269,7 +280,7 @@ describe('GamificationManager', () => {
                 totalSubtasks: 0,
                 totalFocusTime: 0,
                 streak: 5,
-                lastTaskDate: twoDaysAgo.toISOString()
+                lastTaskDate: twoDaysAgo
             });
 
             gamificationManager = await GamificationManager.getInstance(mockContext);
