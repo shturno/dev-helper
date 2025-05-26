@@ -33,27 +33,33 @@
     "commands": [
       {
         "command": "dev-helper.startFocus",
-        "title": "Iniciar Modo Hiperfoco"
+        "title": "Iniciar Modo Hiperfoco",
+        "category": "Dev Helper"
       },
       {
         "command": "dev-helper.stopFocus",
-        "title": "Parar Modo Hiperfoco"
+        "title": "Parar Modo Hiperfoco",
+        "category": "Dev Helper"
       },
       {
         "command": "dev-helper.showDashboard",
-        "title": "Mostrar Dashboard"
+        "title": "Mostrar Dashboard",
+        "category": "Dev Helper"
       },
       {
         "command": "dev-helper.createTask",
-        "title": "Criar Tarefa"
+        "title": "Criar Tarefa",
+        "category": "Dev Helper"
       },
       {
         "command": "dev-helper.decomposeTask",
-        "title": "Decompor Tarefa"
+        "title": "Decompor Tarefa",
+        "category": "Dev Helper"
       },
       {
         "command": "dev-helper.showBlockedNotifications",
-        "title": "Mostrar Notificações Bloqueadas"
+        "title": "Mostrar Notificações Bloqueadas",
+        "category": "Dev Helper"
       }
     ],
     "keybindings": [

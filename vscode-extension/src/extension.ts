@@ -304,6 +304,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
 
         logger.info('Extensão ativada com sucesso');
+
     } catch (error) {
         logger.error('Erro detalhado ao ativar a extensão:', error as Error);
         throw error;

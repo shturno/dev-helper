@@ -959,6 +959,28 @@ export class TaskTracker {
         this.updateDashboard();
     }
 
+    public async deleteTask(taskId: number): Promise<void> {
+        const index = this.tasks.findIndex(t => t.id === taskId);
+        if (index !== -1) {
+            this.tasks.splice(index, 1);
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    public async deleteSubtask(taskId: number, subtaskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (task) {
+            const subIndex = task.subtasks.findIndex(s => s.id === subtaskId);
+            if (subIndex !== -1) {
+                task.subtasks.splice(subIndex, 1);
+                task.updatedAt = new Date();
+                await this.saveTasks();
+                this.updateDashboard();
+            }
+        }
+    }
+
     private startUrgentTaskChecker(): void {
         // Verificar tarefas urgentes a cada 30 minutos
         this.urgentTaskCheckInterval = setInterval(() => {

@@ -5,7 +5,6 @@ import { AnalysisManager } from '../analysis/manager';
 import { ProductivityStats } from '../types/analytics';
 import { TaskStatus } from '../tasks/types';
 import { TagManager } from '../tasks/tag-manager';
-import { Task } from '../tasks/types';
 
 export class DashboardView implements vscode.WebviewViewProvider {
     private webviewView: vscode.WebviewView | undefined;
@@ -147,8 +146,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
         this.webviewView = webviewView;
         webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = this.getWebviewContent();
-
-        webviewView.webview.onDidReceiveMessage(async message => {
+        webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'startFocus':
                     if (this.hyperfocusManager.isActive) {
@@ -162,14 +160,36 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     await this.taskTracker.createTask();
                     this.update();
                     break;
+                case 'deleteTask':
+                    if (message.taskId) {
+                        await this.taskTracker.deleteTask(Number(message.taskId));
+                        this.update();
+                    }
+                    break;
+                case 'deleteSubtask':
+                    if (message.taskId && message.subtaskId) {
+                        await this.taskTracker.deleteSubtask(Number(message.taskId), Number(message.subtaskId));
+                        this.update();
+                    }
+                    break;
+                case 'createTag':
+                    await this.tagManager.createTag();
+                    this.update();
+                    break;
+                case 'createCategory':
+                    await this.tagManager.createCategory();
+                    this.update();
+                    break;
+                case 'dashboardCardClicked':
+                    // Exemplo: abrir insights, perfil, etc.
+                    // Adicione outros handlers conforme necessário
+                    break;
             }
-        }, null, this.disposables);
-
+        });
         // Atualizar o dashboard periodicamente
         const updateInterval = setInterval(() => {
             this.update();
         }, 5000);
-
         this.disposables.push({ dispose: () => clearInterval(updateInterval) });
     }
 
@@ -225,6 +245,11 @@ export class DashboardView implements vscode.WebviewViewProvider {
         const categories = this.tagManager.getCategories();
         const currentTask = (this.taskTracker as any).currentTask || null;
         const statusList = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
+        function calcProgress(task: any) {
+            if (!task.subtasks || task.subtasks.length === 0) return 0;
+            const completed = task.subtasks.filter((s: any) => s.status === 'COMPLETED').length;
+            return Math.round((completed / task.subtasks.length) * 100);
+        }
         return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -734,22 +759,25 @@ export class DashboardView implements vscode.WebviewViewProvider {
       </div>
       <div class="task-list" id="task-list">
         ${tasks.map(task => `
-          <article class="task-item${task.id === currentTask?.id ? ' current' : ''}" data-status="${task.status}" data-tag="${task.tags.map(t => t.name).join(',')}" data-category="${task.category ? task.category.name : ''}">
-            <h3>${task.title}</h3>
+          <article class="task-item${task.id === currentTask?.id ? ' current' : ''}" data-status="${task.status}" data-tag="${task.tags.map((t: any) => t.name).join(',')}" data-category="${task.category ? task.category.name : ''}">
+            <h3>${task.title}
+              <button class="btn-delete-task" title="Deletar tarefa" data-task-id="${task.id}" style="float:right;background:none;border:none;color:red;cursor:pointer;"><span class="codicon codicon-trash"></span></button>
+            </h3>
             <div class="task-tags">
-              ${task.tags.map(tag => `<span class="tag" style="background-color: ${tag.color}">${tag.name}</span>`).join('')}
+              ${task.tags.map((tag: any) => `<span class="tag" style="background-color: ${tag.color}">${tag.name}</span>`).join('')}
               ${task.category ? `<span class="category" style="background-color: ${task.category.color}">${task.category.name}</span>` : ''}
             </div>
             <div class="task-info">
               <span>Status: ${task.status}</span>
               <span>Prioridade: ${task.priorityCriteria.complexity}</span>
               <span>Impacto: ${task.priorityCriteria.impact}</span>
-              ${task.priorityCriteria.deadline ? `<span>Prazo: ${task.priorityCriteria.deadline.toLocaleDateString()}</span>` : ''}
+              ${task.priorityCriteria.deadline ? `<span>Prazo: ${new Date(task.priorityCriteria.deadline).toLocaleDateString()}</span>` : ''}
             </div>
             <div class="task-progress">
-              <div class="progress-bar"><div class="progress" style="width: ${this.calculateTaskProgress(task)}%"></div></div>
-              <span>${this.calculateTaskProgress(task)}%</span>
+              <div class="progress-bar"><div class="progress" style="width: ${calcProgress(task)}%"></div></div>
+              <span>${calcProgress(task)}%</span>
             </div>
+            ${task.subtasks && task.subtasks.length > 0 ? `<ul class="subtask-list">${task.subtasks.map((sub: any) => `<li>${sub.title} <button class="btn-delete-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}" title="Deletar subtarefa" style="background:none;border:none;color:red;cursor:pointer;"><span class="codicon codicon-trash"></span></button></li>`).join('')}</ul>` : ''}
           </article>
         `).join('')}
       </div>
@@ -759,7 +787,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
       <div class="section-title"><span class="codicon codicon-tag"></span> Tags e Categorias</div>
       <div class="tag-category-grid">
         <div class="tag-list">
-          <h3><span class="codicon codicon-tag"></span> Tags Disponíveis</h3>
+          <h3><span class="codicon codicon-tag"></span> Tags Disponíveis <button id="btn-create-tag" title="Nova Tag" style="background:none;border:none;color:green;cursor:pointer;"><span class="codicon codicon-add"></span></button></h3>
           ${tags.length === 0 ? '<p class="card-desc">Nenhuma tag cadastrada.</p>' : tags.map(tag => `
             <div class="tag-item">
               <span class="tag-color" style="background-color: ${tag.color}"></span>
@@ -769,7 +797,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
           `).join('')}
         </div>
         <div class="category-list">
-          <h3><span class="codicon codicon-folder"></span> Categorias</h3>
+          <h3><span class="codicon codicon-folder"></span> Categorias <button id="btn-create-category" title="Nova Categoria" style="background:none;border:none;color:green;cursor:pointer;"><span class="codicon codicon-add"></span></button></h3>
           ${categories.length === 0 ? '<p class="card-desc">Nenhuma categoria cadastrada.</p>' : categories.map(category => `
             <div class="category-item">
               <span class="category-color" style="background-color: ${category.color}"></span>
@@ -782,23 +810,16 @@ export class DashboardView implements vscode.WebviewViewProvider {
     </section>
   </main>
   <script>
+    alert('JS rodando!');
     // Single vscodeApi instance
     const vscodeApi = acquireVsCodeApi();
-
-    // Chart instances
     let focusTimeChartInstance = null;
     let completionRateChartInstance = null;
-
-    // Helper to get CSS variable values
     function getCssVariable(variableName) {
         return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
     }
-    
-    // DOM Elements (cached on DOMContentLoaded)
     let statusFilter, tagFilter, categoryFilter, taskList, statsGrid, createTaskButton, focusModeButton;
-
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize DOM element variables
         statusFilter = document.getElementById('filter-status');
         tagFilter = document.getElementById('filter-tag');
         categoryFilter = document.getElementById('filter-category');
@@ -806,13 +827,9 @@ export class DashboardView implements vscode.WebviewViewProvider {
         statsGrid = document.querySelector('.stats-grid');
         createTaskButton = document.getElementById('btn-create-task');
         focusModeButton = document.getElementById('btn-focus-mode');
-
-        // Event Listeners for filters
         if (statusFilter) statusFilter.addEventListener('change', filterTasks);
         if (tagFilter) tagFilter.addEventListener('change', filterTasks);
         if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
-
-        // Event Listeners for buttons
         if (createTaskButton) {
             createTaskButton.onclick = function() {
                 vscodeApi.postMessage({ command: 'createTask' });
@@ -823,14 +840,11 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 vscodeApi.postMessage({ command: 'startFocus' });
             };
         }
-
-        // Event listener for clickable cards (delegated to statsGrid)
         if (statsGrid) {
             statsGrid.addEventListener('click', function(event) {
                 const card = event.target.closest('.clickable-card');
                 if (card && card.dataset.action) {
                     const action = card.dataset.action;
-                    console.log('Card clicked:', action);
                     vscodeApi.postMessage({
                         command: 'dashboardCardClicked',
                         action: action
@@ -838,12 +852,32 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 }
             });
         }
+        const btnCreateTag = document.getElementById('btn-create-tag');
+        if (btnCreateTag) btnCreateTag.onclick = function() {
+            vscodeApi.postMessage({ command: 'createTag' });
+        };
+        const btnCreateCategory = document.getElementById('btn-create-category');
+        if (btnCreateCategory) btnCreateCategory.onclick = function() {
+            vscodeApi.postMessage({ command: 'createCategory' });
+        };
+        document.querySelectorAll('.btn-delete-task').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const taskId = this.getAttribute('data-task-id');
+                vscodeApi.postMessage({ command: 'deleteTask', taskId });
+            });
+        });
+        document.querySelectorAll('.btn-delete-subtask').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const taskId = this.getAttribute('data-task-id');
+                const subtaskId = this.getAttribute('data-subtask-id');
+                vscodeApi.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
+            });
+        });
     });
-
     function filterTasks() {
-      // Ensure elements are available before trying to read their values
       if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
-
       const status = statusFilter.value;
       const tag = tagFilter.value;
       const category = categoryFilter.value;
@@ -858,14 +892,12 @@ export class DashboardView implements vscode.WebviewViewProvider {
         el.style.display = show ? '' : 'none';
       });
     }
-    
     window.addEventListener('message', function(event) {
       var message = event.data;
       switch (message.type) {
         case 'update':
           if (message.stats) {
             var stats = message.stats;
-            // Elements for dynamic text updates - these are fine to query here as they are within the update scope
             var elementsToUpdate = {
               streak: document.getElementById('streak'),
               tasksCompleted: document.getElementById('tasks-completed'),
@@ -876,7 +908,6 @@ export class DashboardView implements vscode.WebviewViewProvider {
               focusTimeValueDisplay: document.getElementById('focus-time-value'),
               completionRateValueDisplay: document.getElementById('completion-rate-value')
             };
-
             if (elementsToUpdate.streak) elementsToUpdate.streak.textContent = stats.streak + ' dias';
             if (elementsToUpdate.tasksCompleted) elementsToUpdate.tasksCompleted.textContent = stats.tasksCompleted;
             if (elementsToUpdate.mostProductiveHour) elementsToUpdate.mostProductiveHour.textContent = stats.mostProductiveHour ? stats.mostProductiveHour + 'h' : '--:--';
@@ -885,28 +916,23 @@ export class DashboardView implements vscode.WebviewViewProvider {
             if (elementsToUpdate.totalFocusTime) elementsToUpdate.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
             if (elementsToUpdate.focusTimeValueDisplay) elementsToUpdate.focusTimeValueDisplay.textContent = stats.focusTime + ' minutos';
             if (elementsToUpdate.completionRateValueDisplay) elementsToUpdate.completionRateValueDisplay.textContent = stats.completionRate + '%';
-            
             updateFocusTimeChart(stats.focusTime);
             updateCompletionRateChart(stats.completionRate);
           }
           break;
       }
     });
-
     function updateFocusTimeChart(focusTimeMinutes) {
         const ctx = document.getElementById('focusTimeChart')?.getContext('2d');
         if (!ctx) return;
-
         const primaryColor = getCssVariable('--primary');
         const textColor = getCssVariable('--text-color');
         const mutedColor = getCssVariable('--muted');
         const fontFamily = getCssVariable('--vscode-font-family');
-        
-        const dailyGoalMinutes = 480; // Example: 8 hours
-
+        const dailyGoalMinutes = 480;
         if (focusTimeChartInstance) {
             focusTimeChartInstance.data.datasets[0].data = [focusTimeMinutes];
-            focusTimeChartInstance.options.scales.y.max = Math.max(dailyGoalMinutes, focusTimeMinutes + 60); // Ensure goal or current time is visible
+            focusTimeChartInstance.options.scales.y.max = Math.max(dailyGoalMinutes, focusTimeMinutes + 60);
             focusTimeChartInstance.update();
         } else {
             focusTimeChartInstance = new Chart(ctx, {
@@ -927,7 +953,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y', // Horizontal bar
+                    indexAxis: 'y',
                     scales: {
                         x: {
                             beginAtZero: true,
@@ -965,18 +991,14 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 });
         }
     }
-
     function updateCompletionRateChart(completionRate) {
         const ctx = document.getElementById('completionRateChart')?.getContext('2d');
         if (!ctx) return;
-
         const primaryColor = getCssVariable('--primary');
-        const mutedColor = getCssVariable('--muted'); // For the unfilled part
+        const mutedColor = getCssVariable('--muted');
         const textColor = getCssVariable('--text-color');
         const fontFamily = getCssVariable('--vscode-font-family');
-
         const data = [completionRate, 100 - completionRate];
-
         if (completionRateChartInstance) {
             completionRateChartInstance.data.datasets[0].data = data;
             completionRateChartInstance.update();
@@ -988,7 +1010,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     datasets: [{
                         data: data,
                         backgroundColor: [primaryColor, mutedColor],
-                        borderColor: [primaryColor, mutedColor], // Or card-bg for less visible border
+                        borderColor: [primaryColor, mutedColor],
                         borderWidth: 1,
                         hoverOffset: 4
                     }]
@@ -996,7 +1018,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    cutout: '70%', // Makes it a donut
+                    cutout: '70%',
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -1009,16 +1031,16 @@ export class DashboardView implements vscode.WebviewViewProvider {
                             callbacks: {
                                 label: function(context) {
                                     if (context.dataIndex === 0) {
-                                        return \`Concluído: \${context.raw}%\`;
+                                        return 'Concluído: ' + context.raw + '%';
                                     }
-                                    return null; // Don't show tooltip for the "Restante" part
+                                    return null;
                                 }
                             }
                         }
                     },
                     elements: {
                         arc: {
-                            borderWidth: 0 // Remove border from arcs if not desired
+                            borderWidth: 0
                         }
                     }
                 });
@@ -1028,12 +1050,5 @@ export class DashboardView implements vscode.WebviewViewProvider {
 </body>
 </html>
         `;
-    }
-
-    // Helper to calculate task progress (assuming subtasks determine progress)
-    private calculateTaskProgress(task: Task): number {
-        if (task.subtasks.length === 0) return 0;
-        const completedSubtasks = task.subtasks.filter(s => s.status === TaskStatus.COMPLETED).length;
-        return Math.round((completedSubtasks / task.subtasks.length) * 100);
     }
 }
