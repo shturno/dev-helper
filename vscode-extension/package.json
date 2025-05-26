@@ -33,33 +33,27 @@
     "commands": [
       {
         "command": "dev-helper.startFocus",
-        "title": "Dev Helper: Iniciar Modo Hiperfoco",
-        "category": "Dev Helper"
+        "title": "Iniciar Modo Hiperfoco"
       },
       {
         "command": "dev-helper.stopFocus",
-        "title": "Dev Helper: Parar Modo Hiperfoco",
-        "category": "Dev Helper"
+        "title": "Parar Modo Hiperfoco"
       },
       {
         "command": "dev-helper.showDashboard",
-        "title": "Dev Helper: Mostrar Dashboard",
-        "category": "Dev Helper"
+        "title": "Mostrar Dashboard"
       },
       {
         "command": "dev-helper.createTask",
-        "title": "Dev Helper: Criar Tarefa",
-        "category": "Dev Helper"
+        "title": "Criar Tarefa"
       },
       {
         "command": "dev-helper.decomposeTask",
-        "title": "Dev Helper: Decompor Tarefa",
-        "category": "Dev Helper"
+        "title": "Decompor Tarefa"
       },
       {
         "command": "dev-helper.showBlockedNotifications",
-        "title": "Dev Helper: Mostrar Notificações Bloqueadas",
-        "category": "Dev Helper"
+        "title": "Mostrar Notificações Bloqueadas"
       }
     ],
     "keybindings": [
@@ -103,7 +97,7 @@
     ],
     "menus": {
       "editor/context": [
-      {
+        {
           "command": "dev-helper.createTask",
           "group": "dev-helper@1",
           "when": "editorTextFocus"
@@ -119,7 +113,7 @@
           "command": "dev-helper.showDashboard",
           "group": "navigation",
           "when": "view == dev-helper.dashboard"
-      }
+        }
       ]
     },
     "themes": [
@@ -277,6 +271,7 @@
   "dependencies": {
     "@types/sanitize-html": "^2.16.0",
     "axios": "^1.6.7",
+    "pnpm": "^10.11.0",
     "sanitize-html": "^2.17.0"
   }
 }

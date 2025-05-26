@@ -77,18 +77,10 @@ CREATE DATABASE dev_helper;
 - **Gamification**: XP system, levels, and tangible rewards
 - **Smart Prioritization**: Analysis of Git, Jira, and productive hours
 
-## Documentation
+## Documentação
 
-Detailed documentation is available in the `docs/` folder:
-
-- [Requirements Analysis](docs/analise_requisitos.md)
-- [System Architecture](docs/arquitetura_sistema.md)
-- [Database Modeling](docs/modelagem_banco_dados.md)
-- [REST API](docs/endpoints_api.md)
-- [VS Code Extension](docs/extensao_vscode.md)
-- [Gamification and Rewards](docs/gamificacao_recompensas.md)
-- [Task Prioritization](docs/priorizacao_tasks.md)
-- [Criteria Validation](docs/validacao_criterios.md)
+- [Frontend (Next.js)](./frontend/README.md)
+- [Extensão VS Code](./vscode-extension/README.md)
 
 ## Contributing
 
@@ -100,4 +92,4 @@ Detailed documentation is available in the `docs/` folder:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

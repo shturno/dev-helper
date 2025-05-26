@@ -66,10 +66,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         logger.info('Iniciando ativação da extensão...');
 
-        // Limpar o contexto anterior
-        context.subscriptions.forEach(d => d.dispose());
-        context.subscriptions.length = 0;
-
         logger.debug('Inicializando HyperfocusManager...');
         await hyperfocusManager.initialize();
         logger.info('HyperfocusManager inicializado');
@@ -78,8 +74,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await notificationBlocker.initialize();
         logger.info('NotificationBlocker inicializado');
 
-        logger.debug('Inicializando TaskTracker...');
-        await taskTracker.initialize();
         logger.info('TaskTracker inicializado');
 
         logger.debug('Inicializando GamificationManager...');
@@ -158,6 +152,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             vscode.commands.registerCommand(COMMANDS.showDashboard, async () => {
                 try {
+                    // Abre o container da sidebar
+                    await vscode.commands.executeCommand('workbench.view.extension.dev-helper-sidebar');
+                    // Tenta focar a view específica (caso o VS Code suporte)
                     await vscode.commands.executeCommand('dev-helper.dashboard.focus');
                     logger.debug('Dashboard aberto');
                 } catch (error) {

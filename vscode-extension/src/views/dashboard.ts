@@ -145,6 +145,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
         _token: vscode.CancellationToken
     ): void {
         this.webviewView = webviewView;
+        webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = this.getWebviewContent();
 
         webviewView.webview.onDidReceiveMessage(async message => {
@@ -961,8 +962,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                             }
                         }
                     }
-                }
-            });
+                });
         }
     }
 
@@ -1021,8 +1021,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                             borderWidth: 0 // Remove border from arcs if not desired
                         }
                     }
-                }
-            });
+                });
         }
     }
   </script>

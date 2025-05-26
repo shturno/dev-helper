@@ -94,3 +94,6 @@ Thumbs.db
 # Misc
 *.swp
 *.swo 
+
+# Docs
+/docs/
