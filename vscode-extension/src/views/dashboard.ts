@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { TaskTracker } from '../tasks/tracker';
 import { HyperfocusManager } from '../hyperfocus/manager';
 import { AnalysisManager } from '../analysis/manager';
+import { TagManager } from '../tasks/tag-manager';
 import { ProductivityStats } from '../types/analytics';
 import { TaskStatus } from '../tasks/types';
-import { TagManager } from '../tasks/tag-manager';
 
 // Helper function to generate nonce
 function getNonce() {
@@ -232,6 +232,26 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     await this.tagManager.reloadCategories();
                     this.update();
                     break;
+                case 'deleteTag':
+                    if (message.tagId) {
+                        const tag = this.tagManager.getTagById(message.tagId);
+                        if (tag) {
+                            await this.tagManager.deleteTag(tag);
+                            await this.tagManager.reloadTags();
+                            this.update();
+                        }
+                    }
+                    break;
+                case 'deleteCategory':
+                    if (message.categoryId) {
+                        const category = this.tagManager.getCategoryById(message.categoryId);
+                        if (category) {
+                            await this.tagManager.deleteCategory(category);
+                            await this.tagManager.reloadCategories();
+                            this.update();
+                        }
+                    }
+                    break;
                 case 'dashboardCardClicked':
                     // Exemplo: abrir insights, perfil, etc.
                     // Adicione outros handlers conforme necessário
@@ -252,7 +272,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
                 this.webviewView.webview.postMessage({ type: 'update', stats });
             }
         } catch (e) {
-            // Silencia erro se webviewView estiver indisponível
+            // silence if view unavailable
         }
     }
 
@@ -262,16 +282,18 @@ export class DashboardView implements vscode.WebviewViewProvider {
         this.webviewView = undefined;
     }
 
+    /**
+     * Compute dashboard stats for UI updates
+     */
     private getStats(): ProductivityStats {
         const analysisStats = this.analysisManager.getStats();
         const hyperfocusStats = this.hyperfocusManager.getStats();
         const tasks = this.taskTracker.getTasks();
-        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED);
-
+        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
         return {
             focusTime: hyperfocusStats.todayMinutes,
             streak: analysisStats.streak,
-            tasksCompleted: completedTasks.length,
+            tasksCompleted: completedTasks,
             completionRate: this.calculateCompletionRate(),
             mostProductiveHour: analysisStats.mostProductiveHour,
             bestDay: analysisStats.bestDay,
@@ -281,23 +303,33 @@ export class DashboardView implements vscode.WebviewViewProvider {
         };
     }
 
+    /**
+     * Calculate percentage of completed tasks
+     */
     private calculateCompletionRate(): number {
         const tasks = this.taskTracker.getTasks();
         if (tasks.length === 0) return 0;
-        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
-        return Math.round((completedTasks / tasks.length) * 100);
+        const done = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
+        return Math.round((done / tasks.length) * 100);
     }
 
+    /**
+     * Calculate average duration of completed tasks
+     */
     private calculateAverageTaskDuration(): number {
         const tasks = this.taskTracker.getTasks().filter(t => t.status === TaskStatus.COMPLETED && t.actualTime);
         if (tasks.length === 0) return 0;
-        const totalTime = tasks.reduce((sum, task) => sum + (task.actualTime || 0), 0);
-        return Math.round(totalTime / tasks.length);
+        const total = tasks.reduce((sum, t) => sum + (t.actualTime || 0), 0);
+        return Math.round(total / tasks.length);
     }
 
     private getWebviewContent(): string {
         const nonce = getNonce();
         const tasks = this.taskTracker.getTasks();
+        // DEBUG: Forçar tarefa de exemplo se não houver nenhuma
+        if (!tasks || tasks.length === 0) {
+          // placeholder logic removed
+        }
         const tags = this.tagManager.getTags();
         const categories = this.tagManager.getCategories();
         const currentTask = (this.taskTracker as any).currentTask || null;
@@ -767,7 +799,6 @@ export class DashboardView implements vscode.WebviewViewProvider {
       <span class="codicon codicon-dashboard"></span>
       <span class="dashboard-title">Dev Helper Dashboard</span>
     </header>
-
     <section aria-label="Estatísticas" class="section">
       <div class="stats-grid">
         <div class="card chart-card">
@@ -792,7 +823,6 @@ export class DashboardView implements vscode.WebviewViewProvider {
         <div class="card clickable-card" data-action="view-total-focus-details"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
       </div>
     </section>
-
     <section aria-label="Filtros e ações" class="section">
       <div class="section-title"><span class="codicon codicon-list-unordered"></span> Tarefas</div>
       <div class="filters">
@@ -812,7 +842,6 @@ export class DashboardView implements vscode.WebviewViewProvider {
           ${categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('')}
         </select>
         <button id="btn-create-task" title="Criar nova tarefa"><span class="codicon codicon-add"></span>Nova</button>
-        <button id="btn-focus-mode" title="Iniciar/Pausar Foco"><span class="codicon codicon-flame"></span>Foco</button>
       </div>
       <div class="task-list" id="task-list">
         ${tasks.map(task => `
@@ -834,12 +863,19 @@ export class DashboardView implements vscode.WebviewViewProvider {
               <div class="progress-bar"><div class="progress" style="width: ${calcProgress(task)}%"></div></div>
               <span>${calcProgress(task)}%</span>
             </div>
-            ${task.subtasks && task.subtasks.length > 0 ? `<ul class="subtask-list">${task.subtasks.map((sub: any) => `<li>${sub.title} <button class="btn-delete-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}" title="Deletar subtarefa" style="background:none;border:none;color:red;cursor:pointer;"><span class="codicon codicon-trash"></span></button></li>`).join('')}</ul>` : ''}
+            <div class="task-todo">
+              <input type="checkbox" class="task-checkbox" data-task-id="${task.id}" ${task.status === 'COMPLETED' ? 'checked disabled' : ''} /> Marcar como concluída
+            </div>
+            ${task.subtasks && task.subtasks.length > 0 ? `<ul class="subtask-list">${task.subtasks.map((sub: any) => `
+              <li>
+                <input type="checkbox" class="subtask-checkbox" data-task-id="${task.id}" data-subtask-id="${sub.id}" ${sub.status === 'COMPLETED' ? 'checked disabled' : ''} />
+                ${sub.title}
+                <button class="btn-delete-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}" title="Deletar subtarefa" style="background:none;border:none;color:red;cursor:pointer;"><span class="codicon codicon-trash"></span></button>
+              </li>`).join('')}</ul>` : ''}
           </article>
         `).join('')}
       </div>
     </section>
-
     <section aria-label="Gestão de Tags e Categorias" class="section">
       <div class="section-title"><span class="codicon codicon-tag"></span> Tags e Categorias</div>
       <div class="tag-category-grid">
@@ -850,6 +886,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
               <span class="tag-color" style="background-color: ${tag.color}"></span>
               <strong class="tag-name">${tag.name}</strong>
               ${tag.description ? `<span class="tag-desc card-desc">${tag.description}</span>` : ''}
+              <button class="btn-delete-tag" title="Deletar tag" data-tag-id="${tag.id}" style="background:none;border:none;color:red;cursor:pointer;margin-left:8px;"><span class="codicon codicon-trash"></span></button>
             </div>
           `).join('')}
         </div>
@@ -860,6 +897,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
               <span class="category-color" style="background-color: ${category.color}"></span>
               <strong class="category-name">${category.name}</strong>
               ${category.description ? `<span class="category-desc card-desc">${category.description}</span>` : ''}
+              <button class="btn-delete-category" title="Deletar categoria" data-category-id="${category.id}" style="background:none;border:none;color:red;cursor:pointer;margin-left:8px;"><span class="codicon codicon-trash"></span></button>
             </div>
           `).join('')}
         </div>
@@ -868,14 +906,12 @@ export class DashboardView implements vscode.WebviewViewProvider {
   </main>
   <script nonce="${nonce}">
     (function() {
-      function filterTasks() { /* Evita erro de função não definida */ }
+      function filterTasks() {}
       const vscode = acquireVsCodeApi();
       let focusTimeChartInstance = null;
       let completionRateChartInstance = null;
-      
-      // Remova o DOMContentLoaded e execute diretamente
-      console.log('Debug: Script carregado');
-      // Inicialização de elementos
+       
+       // Inicialização de elementos
       const createTaskButton = document.getElementById('btn-create-task');
       const focusModeButton = document.getElementById('btn-focus-mode');
       const btnCreateTag = document.getElementById('btn-create-tag');
@@ -959,8 +995,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
         switch (message.type) {
           case 'update':
             if (message.stats) {
-              var stats = message.stats;
-              var elementsToUpdate = {
+               var elementsToUpdate = {
                 streak: document.getElementById('streak'),
                 tasksCompleted: document.getElementById('tasks-completed'),
                 mostProductiveHour: document.getElementById('most-productive-hour'),
