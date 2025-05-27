@@ -397,6 +397,14 @@ export class TagManager {
         }
     }
 
+    public async reloadTags(): Promise<void> {
+        await this.loadTags();
+    }
+
+    public async reloadCategories(): Promise<void> {
+        await this.loadCategories();
+    }
+
     public getTags(): Tag[] {
         return [...this.tags];
     }
@@ -416,4 +424,4 @@ export class TagManager {
     public dispose(): void {
         this.disposables.forEach(d => d.dispose());
     }
-} 
+}

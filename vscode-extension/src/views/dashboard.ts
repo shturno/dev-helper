@@ -42,31 +42,38 @@ export class DashboardView implements vscode.WebviewViewProvider {
         );
     }
 
-    private showTagManagement(): void {
-        const tags = this.tagManager.getTags();
+    private async showTagManagement(): Promise<void> {
+        await this.tagManager.reloadTags();
+        let tags = this.tagManager.getTags();
         const quickPick = vscode.window.createQuickPick();
         let selectedTag: any;
         let tagToEdit: any;
         let tagToDelete: any;
 
-        quickPick.items = [
-            { label: '$(plus) Criar nova tag', description: 'Adicionar uma nova tag' },
-            { label: '$(pencil) Editar tag', description: 'Modificar uma tag existente' },
-            { label: '$(trash) Excluir tag', description: 'Remover uma tag' },
-            ...tags.map(tag => ({
-                label: `$(tag) ${tag.name}`,
-                description: tag.description || '',
-                detail: `Cor: ${tag.color}`,
-                tag
-            }))
-        ];
+        const refreshItems = () => {
+            tags = this.tagManager.getTags();
+            quickPick.items = [
+                { label: '$(plus) Criar nova tag', description: 'Adicionar uma nova tag' },
+                { label: '$(pencil) Editar tag', description: 'Modificar uma tag existente' },
+                { label: '$(trash) Excluir tag', description: 'Remover uma tag' },
+                ...tags.map(tag => ({
+                    label: `$(tag) ${tag.name}`,
+                    description: tag.description || '',
+                    detail: `Cor: ${tag.color}`,
+                    tag
+                }))
+            ];
+        };
+        refreshItems();
 
         quickPick.onDidChangeSelection(async ([item]) => {
             if (!item) return;
-
             switch (item.label) {
                 case '$(plus) Criar nova tag':
                     await vscode.commands.executeCommand('dev-helper.createTag');
+                    await this.tagManager.reloadTags();
+                    refreshItems();
+                    this.update();
                     break;
                 case '$(pencil) Editar tag':
                     selectedTag = await vscode.window.showQuickPick(
@@ -76,6 +83,9 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     if (selectedTag) {
                         tagToEdit = selectedTag.value;
                         await vscode.commands.executeCommand('dev-helper.editTag', tagToEdit);
+                        await this.tagManager.reloadTags();
+                        refreshItems();
+                        this.update();
                     }
                     break;
                 case '$(trash) Excluir tag':
@@ -84,42 +94,53 @@ export class DashboardView implements vscode.WebviewViewProvider {
                         { placeHolder: 'Selecione a tag para excluir' }
                     );
                     if (selectedTag) {
-                        tagToDelete = selectedTag.value;
-                        await vscode.commands.executeCommand('dev-helper.deleteTag', tagToDelete);
+                        tagToDelete = tags.find(t => t.id === selectedTag.value.id);
+                        if (tagToDelete) {
+                            await vscode.commands.executeCommand('dev-helper.deleteTag', tagToDelete);
+                            await this.tagManager.reloadTags();
+                            refreshItems();
+                            this.update();
+                        }
                     }
                     break;
             }
             quickPick.hide();
         });
-
         quickPick.show();
     }
 
-    private showCategoryManagement(): void {
-        const categories = this.tagManager.getCategories();
+    private async showCategoryManagement(): Promise<void> {
+        await this.tagManager.reloadCategories();
+        let categories = this.tagManager.getCategories();
         const quickPick = vscode.window.createQuickPick();
         let selectedCategory: any;
         let categoryToEdit: any;
         let categoryToDelete: any;
 
-        quickPick.items = [
-            { label: '$(plus) Criar nova categoria', description: 'Adicionar uma nova categoria' },
-            { label: '$(pencil) Editar categoria', description: 'Modificar uma categoria existente' },
-            { label: '$(trash) Excluir categoria', description: 'Remover uma categoria' },
-            ...categories.map(category => ({
-                label: `$(folder) ${category.name}`,
-                description: category.description || '',
-                detail: `Cor: ${category.color}`,
-                category
-            }))
-        ];
+        const refreshItems = () => {
+            categories = this.tagManager.getCategories();
+            quickPick.items = [
+                { label: '$(plus) Criar nova categoria', description: 'Adicionar uma nova categoria' },
+                { label: '$(pencil) Editar categoria', description: 'Modificar uma categoria existente' },
+                { label: '$(trash) Excluir categoria', description: 'Remover uma categoria' },
+                ...categories.map(category => ({
+                    label: `$(folder) ${category.name}`,
+                    description: category.description || '',
+                    detail: `Cor: ${category.color}`,
+                    category
+                }))
+            ];
+        };
+        refreshItems();
 
         quickPick.onDidChangeSelection(async ([item]) => {
             if (!item) return;
-
             switch (item.label) {
                 case '$(plus) Criar nova categoria':
                     await vscode.commands.executeCommand('dev-helper.createCategory');
+                    await this.tagManager.reloadCategories();
+                    refreshItems();
+                    this.update();
                     break;
                 case '$(pencil) Editar categoria':
                     selectedCategory = await vscode.window.showQuickPick(
@@ -129,6 +150,9 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     if (selectedCategory) {
                         categoryToEdit = selectedCategory.value;
                         await vscode.commands.executeCommand('dev-helper.editCategory', categoryToEdit);
+                        await this.tagManager.reloadCategories();
+                        refreshItems();
+                        this.update();
                     }
                     break;
                 case '$(trash) Excluir categoria':
@@ -137,14 +161,18 @@ export class DashboardView implements vscode.WebviewViewProvider {
                         { placeHolder: 'Selecione a categoria para excluir' }
                     );
                     if (selectedCategory) {
-                        categoryToDelete = selectedCategory.value;
-                        await vscode.commands.executeCommand('dev-helper.deleteCategory', categoryToDelete);
+                        categoryToDelete = categories.find(c => c.id === selectedCategory.value.id);
+                        if (categoryToDelete) {
+                            await vscode.commands.executeCommand('dev-helper.deleteCategory', categoryToDelete);
+                            await this.tagManager.reloadCategories();
+                            refreshItems();
+                            this.update();
+                        }
                     }
                     break;
             }
             quickPick.hide();
         });
-
         quickPick.show();
     }
 
@@ -160,11 +188,21 @@ export class DashboardView implements vscode.WebviewViewProvider {
             switch (message.command) {
                 case 'startFocus':
                     if (this.hyperfocusManager.isActive) {
-                        // Corrected: Call deactivateHyperfocus
                         await this.hyperfocusManager.deactivateHyperfocus();
+                        await vscode.commands.executeCommand('workbench.action.closePanel');
+                        await vscode.commands.executeCommand('workbench.action.closeSidebar');
                     } else {
-                        // Corrected: Call activateHyperfocus with a default context
                         await this.hyperfocusManager.activateHyperfocus({ reason: 'manual' });
+                        await vscode.commands.executeCommand('workbench.action.closeSidebar');
+                        await vscode.commands.executeCommand('workbench.action.closePanel');
+                        // Opcional: impedir reabertura (simples: fecha de novo se abrir)
+                        const closeSidebar = vscode.window.onDidChangeWindowState(() => {
+                            if (this.hyperfocusManager.isActive) {
+                                vscode.commands.executeCommand('workbench.action.closeSidebar');
+                                vscode.commands.executeCommand('workbench.action.closePanel');
+                            }
+                        });
+                        this.disposables.push(closeSidebar);
                     }
                     this.update();
                     break;
@@ -186,10 +224,12 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     break;
                 case 'createTag':
                     await this.tagManager.createTag();
+                    await this.tagManager.reloadTags();
                     this.update();
                     break;
                 case 'createCategory':
                     await this.tagManager.createCategory();
+                    await this.tagManager.reloadCategories();
                     this.update();
                     break;
                 case 'dashboardCardClicked':
@@ -206,9 +246,13 @@ export class DashboardView implements vscode.WebviewViewProvider {
     }
 
     public update(): void {
-        if (this.webviewView) {
-            const stats = this.getStats();
-            this.webviewView.webview.postMessage({ type: 'update', stats });
+        try {
+            if (this.webviewView) {
+                const stats = this.getStats();
+                this.webviewView.webview.postMessage({ type: 'update', stats });
+            }
+        } catch (e) {
+            // Silencia erro se webviewView estiver indisponível
         }
     }
 
@@ -252,7 +296,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
     }
 
     private getWebviewContent(): string {
-        const nonce = getNonce(); // Generate nonce for script security
+        const nonce = getNonce();
         const tasks = this.taskTracker.getTasks();
         const tags = this.tagManager.getTags();
         const categories = this.tagManager.getCategories();
@@ -824,6 +868,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
   </main>
   <script nonce="${nonce}">
     (function() {
+      function filterTasks() { /* Evita erro de função não definida */ }
       const vscode = acquireVsCodeApi();
       let focusTimeChartInstance = null;
       let completionRateChartInstance = null;
@@ -888,6 +933,24 @@ export class DashboardView implements vscode.WebviewViewProvider {
           const taskId = btn.getAttribute('data-task-id');
           const subtaskId = btn.getAttribute('data-subtask-id');
           vscode.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
+        });
+      });
+      // Adiciona checkboxes de to-do para tarefas e subtarefas
+      document.querySelectorAll('.task-checkbox').forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          const taskId = cb.getAttribute('data-task-id');
+          if (cb.checked) {
+            vscode.postMessage({ command: 'completeTask', taskId });
+          }
+        });
+      });
+      document.querySelectorAll('.subtask-checkbox').forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          const taskId = cb.getAttribute('data-task-id');
+          const subtaskId = cb.getAttribute('data-subtask-id');
+          if (cb.checked) {
+            vscode.postMessage({ command: 'completeSubtask', taskId, subtaskId });
+          }
         });
       });
       // Message handler
