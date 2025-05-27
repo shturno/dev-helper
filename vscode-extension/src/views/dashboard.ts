@@ -828,250 +828,74 @@ export class DashboardView implements vscode.WebviewViewProvider {
       let focusTimeChartInstance = null;
       let completionRateChartInstance = null;
       
-      function getCssVariable(variableName) {
-        return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
-      }
-      
-      function updateFocusTimeChart(focusTimeMinutes) {
-        const ctx = document.getElementById('focusTimeChart')?.getContext('2d');
-        if (!ctx) return;
-        const primaryColor = getCssVariable('--primary');
-        const textColor = getCssVariable('--text-color');
-        const mutedColor = getCssVariable('--muted');
-        const fontFamily = getCssVariable('--vscode-font-family');
-        const dailyGoalMinutes = 480;
-        if (focusTimeChartInstance) {
-            focusTimeChartInstance.data.datasets[0].data = [focusTimeMinutes];
-            focusTimeChartInstance.options.scales.y.max = Math.max(dailyGoalMinutes, focusTimeMinutes + 60);
-            focusTimeChartInstance.update();
-        } else {
-            focusTimeChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Hoje'],
-                    datasets: [{
-                        label: 'Tempo Focado (minutos)',
-                        data: [focusTimeMinutes],
-                        backgroundColor: [primaryColor],
-                        borderColor: [primaryColor],
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        barPercentage: 0.5,
-                        categoryPercentage: 0.7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            max: Math.max(dailyGoalMinutes, focusTimeMinutes + 60),
-                            grid: { display: false },
-                            ticks: { 
-                                color: textColor,
-                                font: { family: fontFamily, size: 10 }
-                            }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { 
-                                color: textColor,
-                                font: { family: fontFamily, size: 12 }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
-                            titleColor: textColor,
-                            bodyColor: textColor,
-                            borderColor: getCssVariable('--border-color'),
-                            borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.raw + ' min';
-                                }
-                            }
-                        }
-                    }
-                });
-        }
-      }
-      function updateCompletionRateChart(completionRate) {
-        const ctx = document.getElementById('completionRateChart')?.getContext('2d');
-        if (!ctx) return;
-        const primaryColor = getCssVariable('--primary');
-        const mutedColor = getCssVariable('--muted');
-        const textColor = getCssVariable('--text-color');
-        const fontFamily = getCssVariable('--vscode-font-family');
-        const data = [completionRate, 100 - completionRate];
-        if (completionRateChartInstance) {
-            completionRateChartInstance.data.datasets[0].data = data;
-            completionRateChartInstance.update();
-        } else {
-            completionRateChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Concluído', 'Restante'],
-                    datasets: [{
-                        data: data,
-                        backgroundColor: [primaryColor, mutedColor],
-                        borderColor: [primaryColor, mutedColor],
-                        borderWidth: 1,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
-                            titleColor: textColor,
-                            bodyColor: textColor,
-                            borderColor: getCssVariable('--border-color'),
-                            borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.dataIndex === 0) {
-                                        return 'Concluído: ' + context.raw + '%';
-                                    }
-                                    return null;
-                                }
-                            }
-                        }
-                    },
-                    elements: {
-                        arc: {
-                            borderWidth: 0
-                        }
-                    }
-                });
-        }
-      }
-      
-      function filterTasks() {
-        const statusFilter = document.getElementById('filter-status');
-        const tagFilter = document.getElementById('filter-tag');
-        const categoryFilter = document.getElementById('filter-category');
-        const taskList = document.getElementById('task-list');
-        if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
-        const status = statusFilter.value;
-        const tag = tagFilter.value;
-        const category = categoryFilter.value;
-        Array.from(taskList.children).forEach(function(el) {
-          const elStatus = el.getAttribute('data-status');
-          const elTags = el.getAttribute('data-tag') || '';
-          const elCategory = el.getAttribute('data-category') || '';
-          let show = true;
-          if (status && elStatus !== status) show = false;
-          if (tag && !elTags.split(',').includes(tag)) show = false;
-          if (category && elCategory !== category) show = false;
-          el.style.display = show ? '' : 'none';
+      // Remova o DOMContentLoaded e execute diretamente
+      console.log('Debug: Script carregado');
+      // Inicialização de elementos
+      const createTaskButton = document.getElementById('btn-create-task');
+      const focusModeButton = document.getElementById('btn-focus-mode');
+      const btnCreateTag = document.getElementById('btn-create-tag');
+      const btnCreateCategory = document.getElementById('btn-create-category');
+      const statusFilter = document.getElementById('filter-status');
+      const tagFilter = document.getElementById('filter-tag');
+      const categoryFilter = document.getElementById('filter-category');
+      const statsGrid = document.querySelector('.stats-grid');
+
+      // Event Listeners - Execute imediatamente
+      if (createTaskButton) {
+        createTaskButton.addEventListener('click', () => {
+          vscode.postMessage({ command: 'createTask' });
         });
       }
-
-      // Inicialização quando o DOM estiver pronto
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('Debug: DOM carregado');
-        
-        // Inicialização de elementos
-        const createTaskButton = document.getElementById('btn-create-task');
-        const focusModeButton = document.getElementById('btn-focus-mode');
-        const btnCreateTag = document.getElementById('btn-create-tag');
-        const btnCreateCategory = document.getElementById('btn-create-category');
-        const statusFilter = document.getElementById('filter-status');
-        const tagFilter = document.getElementById('filter-tag');
-        const categoryFilter = document.getElementById('filter-category');
-        const statsGrid = document.querySelector('.stats-grid');
-
-        console.log('Debug: Elementos encontrados:', {
-          createTaskButton: !!createTaskButton,
-          focusModeButton: !!focusModeButton,
-          btnCreateTag: !!btnCreateTag,
-          btnCreateCategory: !!btnCreateCategory
+      if (focusModeButton) {
+        focusModeButton.addEventListener('click', () => {
+          vscode.postMessage({ command: 'startFocus' });
         });
-
-        // Event Listeners
-        if (createTaskButton) {
-          createTaskButton.onclick = () => {
-            console.log('Debug: Clique em criar tarefa');
-            vscode.postMessage({ command: 'createTask' });
-          };
-        }
-
-        if (focusModeButton) {
-          focusModeButton.onclick = () => {
-            console.log('Debug: Clique em modo foco');
-            vscode.postMessage({ command: 'startFocus' });
-          };
-        }
-
-        if (btnCreateTag) {
-          btnCreateTag.onclick = () => {
-            console.log('Debug: Clique em criar tag');
-            vscode.postMessage({ command: 'createTag' });
-          };
-        }
-
-        if (btnCreateCategory) {
-          btnCreateCategory.onclick = () => {
-            console.log('Debug: Clique em criar categoria');
-            vscode.postMessage({ command: 'createCategory' });
-          };
-        }
-
-        // Filtros
-        if (statusFilter) statusFilter.addEventListener('change', filterTasks);
-        if (tagFilter) tagFilter.addEventListener('change', filterTasks);
-        if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
-
-        // Grid de estatísticas
-        if (statsGrid) {
-          statsGrid.addEventListener('click', (event) => {
-            const card = event.target.closest('.clickable-card');
-            if (card && card.dataset.action) {
-              vscode.postMessage({
-                command: 'dashboardCardClicked',
-                action: card.dataset.action
-              });
-            }
-          });
-        }
-
-        // Event handlers para botões de delete
-        document.querySelectorAll('.btn-delete-task').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const taskId = btn.getAttribute('data-task-id');
-            vscode.postMessage({ command: 'deleteTask', taskId });
-          });
+      }
+      if (btnCreateTag) {
+        btnCreateTag.addEventListener('click', () => {
+          vscode.postMessage({ command: 'createTag' });
         });
-
-        document.querySelectorAll('.btn-delete-subtask').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const taskId = btn.getAttribute('data-task-id');
-            const subtaskId = btn.getAttribute('data-subtask-id');
-            vscode.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
-          });
+      }
+      if (btnCreateCategory) {
+        btnCreateCategory.addEventListener('click', () => {
+          vscode.postMessage({ command: 'createCategory' });
+        });
+      }
+      if (statusFilter) statusFilter.addEventListener('change', filterTasks);
+      if (tagFilter) tagFilter.addEventListener('change', filterTasks);
+      if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
+      if (statsGrid) {
+        statsGrid.addEventListener('click', (event) => {
+          const card = event.target.closest('.clickable-card');
+          if (card && card.dataset.action) {
+            vscode.postMessage({
+              command: 'dashboardCardClicked',
+              action: card.dataset.action
+            });
+          }
+        });
+      }
+      document.querySelectorAll('.btn-delete-task').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const taskId = btn.getAttribute('data-task-id');
+          vscode.postMessage({ command: 'deleteTask', taskId });
         });
       });
-
+      document.querySelectorAll('.btn-delete-subtask').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const taskId = btn.getAttribute('data-task-id');
+          const subtaskId = btn.getAttribute('data-subtask-id');
+          vscode.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
+        });
+      });
       // Message handler
       window.addEventListener('message', (event) => {
         const message = event.data;
         switch (message.type) {
           case 'update':
             if (message.stats) {
-              console.log('Debug: Atualização recebida', message.stats);
               var stats = message.stats;
               var elementsToUpdate = {
                 streak: document.getElementById('streak'),
@@ -1101,6 +925,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
   </script>
 </body>
 </html>
+
         `;
     }
 }
