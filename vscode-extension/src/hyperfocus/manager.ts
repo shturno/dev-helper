@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { Logger } from '../utils/logger'; // Assuming logger is in utils
+
+const logger = Logger.getInstance();
 
 export interface HyperfocusContext {
     reason: 'manual' | 'complex_file' | 'peak_time' | 'restore';
@@ -8,33 +11,30 @@ export interface HyperfocusContext {
 
 export class HyperfocusManager {
     private static instance: HyperfocusManager;
-    private config: vscode.WorkspaceConfiguration;
     public isActive: boolean = false;
     private startTime: number | null = null;
     private statusBarItem: vscode.StatusBarItem;
     private disposables: vscode.Disposable[] = [];
     private originalSettings: {
-        theme: string;
-        sidebarVisible: boolean;
-        minimapEnabled: boolean;
-        fontSize: number;
+        theme: string | undefined;
+        sidebarVisible: boolean; 
+        minimapEnabled: boolean | undefined;
+        fontSize: number | undefined;
     } | null = null;
+
     private stats = {
         todayMinutes: 0,
         streak: 0,
         totalMinutes: 0,
         sessions: 0,
-        lastSessionDate: null as Date | null
+        lastSessionDate: null as Date | null,
     };
 
     private constructor(private context: vscode.ExtensionContext) {
-        this.config = vscode.workspace.getConfiguration('tdahDevHelper');
         this.statusBarItem = vscode.window.createStatusBarItem(
             vscode.StatusBarAlignment.Right,
-            97
+            97 // Priority
         );
-        this.statusBarItem.command = 'dev-helper.stopFocus';
-        this.loadStats();
     }
 
     public static getInstance(context: vscode.ExtensionContext): HyperfocusManager {
@@ -45,83 +45,82 @@ export class HyperfocusManager {
     }
 
     public async initialize(): Promise<void> {
-        // Configurar status bar
         this.statusBarItem.text = '$(eye) TDAH: Modo Hiperfoco';
         this.statusBarItem.tooltip = 'Clique para desativar o modo hiperfoco';
         this.statusBarItem.hide();
 
-        // Registrar eventos
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand('dev-helper.stopFocus', async () => {
+                    await this.deactivateHyperfocus();
+                })
+            );
+            this.statusBarItem.command = 'dev-helper.stopFocus';
+            logger.info("Comando 'dev-helper.stopFocus' registrado com sucesso.");
+        } catch (error) {
+            logger.warn("Falha ao registrar o comando 'dev-helper.stopFocus', pode já estar registrado:", error as Error);
+            this.statusBarItem.command = 'dev-helper.stopFocus';
+        }
+
         this.disposables.push(
             vscode.window.onDidChangeWindowState(this.handleWindowStateChange.bind(this))
         );
 
-        // Registrar comando para parar hiperfoco
-        this.disposables.push(
-            vscode.commands.registerCommand('dev-helper.stopFocus', async () => {
-                await this.deactivateHyperfocus();
-            })
-        );
+        await this.loadStats();
 
-        // Verificar se há uma sessão ativa pendente
-        const lastSession = this.context.globalState.get<{startTime: number}>('hyperfocus-last-session');
+        const lastSession = this.context.globalState.get<{ startTime: number }>('hyperfocus-last-session');
         if (lastSession && lastSession.startTime) {
             const sessionDuration = Date.now() - lastSession.startTime;
-            if (sessionDuration < 4 * 60 * 60 * 1000) { // 4 horas
+            if (sessionDuration < 4 * 60 * 60 * 1000) { // 4 hours
                 const shouldRestore = await vscode.window.showWarningMessage(
                     'Uma sessão de hiperfoco anterior foi interrompida. Deseja restaurá-la?',
                     'Sim',
                     'Não'
                 );
                 if (shouldRestore === 'Sim') {
-                    await this.activateHyperfocus({ reason: 'restore', complexity: 0 });
+                    await this.activateHyperfocus({ reason: 'restore' });
                 } else {
-                    await this.context.globalState.update('hyperfocus-last-session', null);
+                    await this.context.globalState.update('hyperfocus-last-session', undefined);
                 }
             } else {
-                await this.context.globalState.update('hyperfocus-last-session', null);
+                await this.context.globalState.update('hyperfocus-last-session', undefined);
             }
         }
     }
 
     public dispose(): void {
-        // Limpar todos os disposables
         this.disposables.forEach(d => d.dispose());
         this.disposables = [];
-
-        // Esconder e limpar status bar
         this.statusBarItem.hide();
         this.statusBarItem.dispose();
-
-        // Se estiver ativo, desativar o modo hiperfoco
         if (this.isActive) {
-            this.deactivateHyperfocus().catch(error => {
-                console.error('Erro ao desativar hiperfoco durante dispose:', error);
+            this.deactivateHyperfocus(true).catch(error => {
+                logger.error('Erro ao desativar hiperfoco durante dispose:', error as Error);
             });
         }
     }
 
-    private loadStats(): void {
+    private async loadStats(): Promise<void> {
         try {
-            const savedStats = this.config.get('hyperfocusStats', {
+            const savedStats = this.context.globalState.get('hyperfocusStats', {
                 todayMinutes: 0,
                 streak: 0,
                 totalMinutes: 0,
                 sessions: 0,
-                lastSessionDate: null
+                lastSessionDate: null as string | null,
             });
 
             this.stats = {
                 ...savedStats,
-                lastSessionDate: savedStats.lastSessionDate ? new Date(savedStats.lastSessionDate) : null
+                lastSessionDate: savedStats.lastSessionDate ? new Date(savedStats.lastSessionDate) : null,
             };
+            logger.info('Estatísticas carregadas:', this.stats);
 
-            // Reset today's minutes if it's a new day
             if (this.stats.lastSessionDate) {
                 const today = new Date();
                 const lastSession = new Date(this.stats.lastSessionDate);
                 if (today.toDateString() !== lastSession.toDateString()) {
                     this.stats.todayMinutes = 0;
-                    // Update streak
                     const yesterday = new Date(today);
                     yesterday.setDate(yesterday.getDate() - 1);
                     if (yesterday.toDateString() === lastSession.toDateString()) {
@@ -132,18 +131,26 @@ export class HyperfocusManager {
                 }
             }
         } catch (error) {
-            console.error('Erro ao carregar estatísticas:', error);
+            logger.error('Erro ao carregar estatísticas:', error as Error);
+            this.stats = {
+                todayMinutes: 0,
+                streak: 0,
+                totalMinutes: 0,
+                sessions: 0,
+                lastSessionDate: null,
+            };
         }
     }
 
     private async saveStats(): Promise<void> {
         try {
-            await this.config.update('hyperfocusStats', {
+            await this.context.globalState.update('hyperfocusStats', {
                 ...this.stats,
-                lastSessionDate: this.stats.lastSessionDate?.toISOString()
-            }, true);
+                lastSessionDate: this.stats.lastSessionDate?.toISOString() ?? null,
+            });
+            logger.info('Estatísticas salvas:', this.stats);
         } catch (error) {
-            console.error('Erro ao salvar estatísticas:', error);
+            logger.error('Erro ao salvar estatísticas:', error as Error);
         }
     }
 
@@ -151,45 +158,44 @@ export class HyperfocusManager {
         return { ...this.stats };
     }
 
-    public async activateHyperfocus(context: HyperfocusContext): Promise<void> {
+    public async activateHyperfocus(context?: HyperfocusContext): Promise<void> {
         if (this.isActive) {
+            logger.info('Modo hiperfoco já está ativo.');
             return;
         }
+        logger.info('Ativando modo hiperfoco...', context);
 
         try {
-            // Salvar configurações atuais
             this.saveCurrentSettings();
-            
-            // Registrar início da sessão
             this.startTime = Date.now();
-            
-            // Ativar modo hiperfoco
             this.isActive = true;
             this.statusBarItem.show();
 
-            // Aplicar configurações de hiperfoco
             await this.applyHyperfocusSettings();
 
-            // Mostrar notificação
+            await this.context.globalState.update('hyperfocus-last-session', { startTime: this.startTime });
+
             vscode.window.showInformationMessage(
                 `Modo Hiperfoco ativado! ${this.getActivationReasonMessage(context)}`
             );
-
+            logger.info('Modo hiperfoco ativado com sucesso.');
         } catch (error) {
-            console.error('Erro ao ativar modo hiperfoco:', error);
-            vscode.window.showErrorMessage('Erro ao ativar modo hiperfoco');
-            // Restaurar configurações em caso de erro
+            logger.error('Erro ao ativar modo hiperfoco:', error as Error);
+            vscode.window.showErrorMessage('Erro ao ativar modo hiperfoco. Verifique os logs.');
             await this.restoreNormalSettings();
+            this.isActive = false;
+            this.statusBarItem.hide();
         }
     }
 
-    public async deactivateHyperfocus(): Promise<void> {
+    public async deactivateHyperfocus(isDisposing: boolean = false): Promise<void> {
         if (!this.isActive) {
+            logger.info('Modo hiperfoco já está inativo.');
             return;
         }
+        logger.info('Desativando modo hiperfoco...');
 
         try {
-            // Calcular duração da sessão
             const duration = this.getSessionDurationInMinutes();
             if (duration > 0) {
                 this.stats.todayMinutes += duration;
@@ -199,120 +205,144 @@ export class HyperfocusManager {
                 await this.saveStats();
             }
 
-            // Desativar modo hiperfoco
             this.isActive = false;
             this.startTime = null;
             this.statusBarItem.hide();
 
-            // Restaurar configurações normais
             await this.restoreNormalSettings();
+            await this.context.globalState.update('hyperfocus-last-session', undefined);
 
-            // Mostrar notificação com duração da sessão
-            vscode.window.showInformationMessage(
-                `Modo Hiperfoco desativado. Duração: ${this.formatDuration(duration)}`
-            );
-
+            if (!isDisposing) {
+                vscode.window.showInformationMessage(
+                    `Modo Hiperfoco desativado. Duração: ${this.formatDuration(duration)}`
+                );
+            }
+            logger.info('Modo hiperfoco desativado com sucesso.');
         } catch (error) {
-            console.error('Erro ao desativar modo hiperfoco:', error);
-            vscode.window.showErrorMessage('Erro ao desativar modo hiperfoco');
+            logger.error('Erro ao desativar modo hiperfoco:', error as Error);
+            if (!isDisposing) {
+                vscode.window.showErrorMessage('Erro ao desativar modo hiperfoco. Verifique os logs.');
+            }
+            this.isActive = false;
+            this.statusBarItem.hide();
         }
     }
 
     private saveCurrentSettings(): void {
-        const config = vscode.workspace.getConfiguration();
+        const workbenchConfig = vscode.workspace.getConfiguration('workbench');
+        const editorConfig = vscode.workspace.getConfiguration('editor');
+
         this.originalSettings = {
-            theme: config.get('workbench.colorTheme', 'Default Dark+'),
-            sidebarVisible: true,
-            minimapEnabled: config.get('editor.minimap.enabled', true),
-            fontSize: config.get('editor.fontSize', 14)
+            theme: workbenchConfig.get('colorTheme'),
+            sidebarVisible: true, // This needs a more robust way to check current state
+            minimapEnabled: editorConfig.get('minimap.enabled'),
+            fontSize: editorConfig.get('fontSize'),
         };
+        logger.info('Configurações atuais salvas:', this.originalSettings);
     }
 
     private async applyHyperfocusSettings(): Promise<void> {
-        const config = vscode.workspace.getConfiguration();
+        logger.info('Aplicando configurações de hiperfoco...');
+        const workbenchConfig = vscode.workspace.getConfiguration('workbench');
+        const editorConfig = vscode.workspace.getConfiguration('editor');
+        // Use hyperfocusConfig for hyperfocus specific settings from 'tdahDevHelper.hyperfocus'
+        const hyperfocusConfig = vscode.workspace.getConfiguration('tdahDevHelper.hyperfocus');
 
-        // Aplicar tema de hiperfoco
-        const theme = this.config.get('theme', 'tdah-dark');
-        await config.update('workbench.colorTheme', theme, true);
-
-        // Esconder barra lateral se configurado
-        if (this.config.get('hideSidebar', true)) {
-            try {
-                await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
-            } catch (error) {
-                console.warn('Não foi possível esconder a barra lateral:', error);
+        try {
+            const focusTheme = hyperfocusConfig.get<string>('theme');
+            if (focusTheme) {
+                await workbenchConfig.update('colorTheme', focusTheme, vscode.ConfigurationTarget.Global);
             }
-        }
 
-        // Esconder minimapa se configurado
-        if (this.config.get('hideMinimap', true)) {
-            await config.update('editor.minimap.enabled', false, true);
-        }
+            if (hyperfocusConfig.get<boolean>('hideSidebar')) {
+                await vscode.commands.executeCommand('workbench.action.closeSidebar');
+            }
 
-        // Aumentar tamanho da fonte se configurado
-        if (this.config.get('increaseFontSize', true)) {
-            const currentSize = config.get('editor.fontSize', 14);
-            await config.update('editor.fontSize', currentSize + 2, true);
-        }
+            if (hyperfocusConfig.get<boolean>('hideMinimap')) {
+                await editorConfig.update('minimap.enabled', false, vscode.ConfigurationTarget.Global);
+            }
 
-        // Desativar distrações
-        await config.update('editor.wordWrap', 'off', true);
-        await config.update('editor.renderWhitespace', 'none', true);
-        await config.update('editor.guides.bracketPairs', false, true);
-        await config.update('editor.suggest.showWords', false, true);
+            if (hyperfocusConfig.get<boolean>('increaseFontSize')) {
+                const currentSize = editorConfig.get<number>('fontSize');
+                if (currentSize !== undefined) {
+                    await editorConfig.update('fontSize', currentSize + 2, vscode.ConfigurationTarget.Global);
+                }
+            }
+
+            await editorConfig.update('wordWrap', 'off', vscode.ConfigurationTarget.Global);
+            logger.info('Configurações de hiperfoco aplicadas.');
+
+        } catch (error) {
+            logger.error("Erro ao aplicar configurações de hiperfoco:", error as Error);
+            vscode.window.showErrorMessage("Não foi possível aplicar todas as configurações de hiperfoco.");
+        }
     }
 
     private async restoreNormalSettings(): Promise<void> {
         if (!this.originalSettings) {
+            logger.info('Nenhuma configuração original para restaurar.');
             return;
         }
+        logger.info('Restaurando configurações normais...', this.originalSettings);
+        const workbenchConfig = vscode.workspace.getConfiguration('workbench');
+        const editorConfig = vscode.workspace.getConfiguration('editor');
+        // Use hyperfocusConfig for hyperfocus specific settings from 'tdahDevHelper.hyperfocus'
+        const hyperfocusConfig = vscode.workspace.getConfiguration('tdahDevHelper.hyperfocus');
 
-        const config = vscode.workspace.getConfiguration();
-
-        // Restaurar todas as configurações originais
-        await Promise.all([
-            config.update('workbench.colorTheme', this.originalSettings.theme, true),
-            config.update('editor.minimap.enabled', this.originalSettings.minimapEnabled, true),
-            config.update('editor.fontSize', this.originalSettings.fontSize, true),
-            config.update('editor.wordWrap', 'on', true),
-            config.update('editor.renderWhitespace', 'all', true),
-            config.update('editor.guides.bracketPairs', true, true),
-            config.update('editor.suggest.showWords', true, true)
-        ]);
-
-        // Restaurar barra lateral se necessário
-        if (this.config.get('hideSidebar', true)) {
-            try {
-                await vscode.commands.executeCommand('workbench.action.toggleSidebarVisibility');
-            } catch (error) {
-                console.warn('Não foi possível restaurar a barra lateral:', error);
+        try {
+            if (this.originalSettings.theme !== undefined) {
+                await workbenchConfig.update('colorTheme', this.originalSettings.theme, vscode.ConfigurationTarget.Global);
             }
-        }
 
-        this.originalSettings = null;
+            // If sidebar was hidden by hyperfocus, attempt to show it.
+            // This is a simplification; a robust solution would store the actual original state.
+            if (hyperfocusConfig.get<boolean>('hideSidebar')) {
+                await vscode.commands.executeCommand('workbench.action.openSidebar'); 
+            }
+
+            if (this.originalSettings.minimapEnabled !== undefined) {
+                await editorConfig.update('minimap.enabled', this.originalSettings.minimapEnabled, vscode.ConfigurationTarget.Global);
+            }
+
+            if (this.originalSettings.fontSize !== undefined) {
+                await editorConfig.update('fontSize', this.originalSettings.fontSize, vscode.ConfigurationTarget.Global);
+            }
+
+            await editorConfig.update('wordWrap', 'on', vscode.ConfigurationTarget.Global);
+
+            this.originalSettings = null;
+            logger.info('Configurações normais restauradas.');
+        } catch (error) {
+            logger.error("Erro ao restaurar configurações normais:", error as Error);
+            vscode.window.showErrorMessage("Não foi possível restaurar todas as configurações originais. Pode ser necessário ajustar manualmente.");
+        }
     }
 
     private async handleWindowStateChange(state: vscode.WindowState): Promise<void> {
         if (this.isActive && !state.focused) {
-            // Salvar estado da sessão atual
+            logger.info('Janela do VS Code perdeu o foco durante o modo hiperfoco.');
             if (this.startTime) {
                 await this.context.globalState.update('hyperfocus-last-session', {
-                    startTime: this.startTime
+                    startTime: this.startTime,
                 });
+                logger.info('Sessão de hiperfoco salva para possível restauração.');
             }
+        } else if (this.isActive && state.focused) {
+            logger.info('Janela do VS Code recuperou o foco durante o modo hiperfoco.');
         }
     }
 
-    private getActivationReasonMessage(context: HyperfocusContext): string {
+    private getActivationReasonMessage(context?: HyperfocusContext): string {
+        if (!context) return '';
         switch (context.reason) {
             case 'manual':
-                return 'Ativado manualmente';
+                return 'Ativado manualmente.';
             case 'complex_file':
-                return `Arquivo complexo detectado (${context.fileName})`;
+                return `Devido à complexidade do arquivo: ${context.fileName || 'arquivo atual'}.`;
             case 'peak_time':
-                return 'Horário de pico de produtividade';
+                return 'Estamos no seu horário de pico de produtividade!';
             case 'restore':
-                return 'Restaurando sessão anterior';
+                return 'Restaurando sessão anterior.';
             default:
                 return '';
         }
@@ -322,32 +352,34 @@ export class HyperfocusManager {
         if (!this.startTime) {
             return 0;
         }
-        return Math.floor((Date.now() - this.startTime) / 1000 / 60);
+        return Math.floor((Date.now() - this.startTime) / (1000 * 60));
     }
 
     private formatDuration(minutes: number): string {
+        if (minutes < 1) return "menos de um minuto";
         const hours = Math.floor(minutes / 60);
         const mins = minutes % 60;
+        let message = '';
         if (hours > 0) {
-            return `${hours}h ${mins}m`;
+            message += `${hours} hora${hours > 1 ? 's' : ''}`;
         }
-        return `${mins} minutos`;
+        if (mins > 0) {
+            if (hours > 0) message += ' e ';
+            message += `${mins} minuto${mins > 1 ? 's' : ''}`;
+        }
+        return message || "0 minutos";
     }
+}
 
-    public async startHyperfocus(): Promise<void> {
-        if (this.isActive) {
-            return;
-        }
-        this.isActive = true;
-        this.stats.todayMinutes = 0;
-        // Implementar lógica de início do hiperfoco
+export function getHyperfocusManager(context?: vscode.ExtensionContext): HyperfocusManager {
+    if (context && !HyperfocusManager.getInstance(context)) {
+        // This condition is a bit off, getInstance will create if not exists.
+        // The main point is to ensure it's called with context at least once.
     }
-
-    public async stopHyperfocus(): Promise<void> {
-        if (!this.isActive) {
-            return;
-        }
-        this.isActive = false;
-        // Implementar lógica de parada do hiperfoco
+    // Ensure context was provided for the first call that creates the instance.
+    // Subsequent calls can omit it if the instance already exists.
+    if (!HyperfocusManager.getInstance(context!)) { 
+        throw new Error("HyperfocusManager não foi inicializado com um contexto. Certifique-se de que o contexto da extensão é passado na primeira chamada para getInstance ou getHyperfocusManager.");
     }
-} 
+    return HyperfocusManager.getInstance(context!);
+}

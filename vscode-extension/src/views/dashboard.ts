@@ -150,9 +150,11 @@ export class DashboardView implements vscode.WebviewViewProvider {
             switch (message.command) {
                 case 'startFocus':
                     if (this.hyperfocusManager.isActive) {
-                        await this.hyperfocusManager.stopHyperfocus();
+                        // Corrected: Call deactivateHyperfocus
+                        await this.hyperfocusManager.deactivateHyperfocus();
                     } else {
-                        await this.hyperfocusManager.startHyperfocus();
+                        // Corrected: Call activateHyperfocus with a default context
+                        await this.hyperfocusManager.activateHyperfocus({ reason: 'manual' });
                     }
                     this.update();
                     break;
@@ -810,119 +812,16 @@ export class DashboardView implements vscode.WebviewViewProvider {
     </section>
   </main>
   <script>
-    alert('JS rodando!');
-    // Single vscodeApi instance
-    const vscodeApi = acquireVsCodeApi();
-    let focusTimeChartInstance = null;
-    let completionRateChartInstance = null;
-    function getCssVariable(variableName) {
+    (function() {
+      const vscode = acquireVsCodeApi();
+      let focusTimeChartInstance = null;
+      let completionRateChartInstance = null;
+      
+      function getCssVariable(variableName) {
         return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
-    }
-    let statusFilter, tagFilter, categoryFilter, taskList, statsGrid, createTaskButton, focusModeButton;
-    document.addEventListener('DOMContentLoaded', function() {
-        statusFilter = document.getElementById('filter-status');
-        tagFilter = document.getElementById('filter-tag');
-        categoryFilter = document.getElementById('filter-category');
-        taskList = document.getElementById('task-list');
-        statsGrid = document.querySelector('.stats-grid');
-        createTaskButton = document.getElementById('btn-create-task');
-        focusModeButton = document.getElementById('btn-focus-mode');
-        if (statusFilter) statusFilter.addEventListener('change', filterTasks);
-        if (tagFilter) tagFilter.addEventListener('change', filterTasks);
-        if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
-        if (createTaskButton) {
-            createTaskButton.onclick = function() {
-                vscodeApi.postMessage({ command: 'createTask' });
-            };
-        }
-        if (focusModeButton) {
-            focusModeButton.onclick = function() {
-                vscodeApi.postMessage({ command: 'startFocus' });
-            };
-        }
-        if (statsGrid) {
-            statsGrid.addEventListener('click', function(event) {
-                const card = event.target.closest('.clickable-card');
-                if (card && card.dataset.action) {
-                    const action = card.dataset.action;
-                    vscodeApi.postMessage({
-                        command: 'dashboardCardClicked',
-                        action: action
-                    });
-                }
-            });
-        }
-        const btnCreateTag = document.getElementById('btn-create-tag');
-        if (btnCreateTag) btnCreateTag.onclick = function() {
-            vscodeApi.postMessage({ command: 'createTag' });
-        };
-        const btnCreateCategory = document.getElementById('btn-create-category');
-        if (btnCreateCategory) btnCreateCategory.onclick = function() {
-            vscodeApi.postMessage({ command: 'createCategory' });
-        };
-        document.querySelectorAll('.btn-delete-task').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const taskId = this.getAttribute('data-task-id');
-                vscodeApi.postMessage({ command: 'deleteTask', taskId });
-            });
-        });
-        document.querySelectorAll('.btn-delete-subtask').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const taskId = this.getAttribute('data-task-id');
-                const subtaskId = this.getAttribute('data-subtask-id');
-                vscodeApi.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
-            });
-        });
-    });
-    function filterTasks() {
-      if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
-      const status = statusFilter.value;
-      const tag = tagFilter.value;
-      const category = categoryFilter.value;
-      Array.from(taskList.children).forEach(function(el) {
-        const elStatus = el.getAttribute('data-status');
-        const elTags = el.getAttribute('data-tag') || '';
-        const elCategory = el.getAttribute('data-category') || '';
-        let show = true;
-        if (status && elStatus !== status) show = false;
-        if (tag && !elTags.split(',').includes(tag)) show = false;
-        if (category && elCategory !== category) show = false;
-        el.style.display = show ? '' : 'none';
-      });
-    }
-    window.addEventListener('message', function(event) {
-      var message = event.data;
-      switch (message.type) {
-        case 'update':
-          if (message.stats) {
-            var stats = message.stats;
-            var elementsToUpdate = {
-              streak: document.getElementById('streak'),
-              tasksCompleted: document.getElementById('tasks-completed'),
-              mostProductiveHour: document.getElementById('most-productive-hour'),
-              bestDay: document.getElementById('best-day'),
-              avgTaskDuration: document.getElementById('avg-task-duration'),
-              totalFocusTime: document.getElementById('total-focus-time'),
-              focusTimeValueDisplay: document.getElementById('focus-time-value'),
-              completionRateValueDisplay: document.getElementById('completion-rate-value')
-            };
-            if (elementsToUpdate.streak) elementsToUpdate.streak.textContent = stats.streak + ' dias';
-            if (elementsToUpdate.tasksCompleted) elementsToUpdate.tasksCompleted.textContent = stats.tasksCompleted;
-            if (elementsToUpdate.mostProductiveHour) elementsToUpdate.mostProductiveHour.textContent = stats.mostProductiveHour ? stats.mostProductiveHour + 'h' : '--:--';
-            if (elementsToUpdate.bestDay) elementsToUpdate.bestDay.textContent = stats.bestDay || '--';
-            if (elementsToUpdate.avgTaskDuration) elementsToUpdate.avgTaskDuration.textContent = stats.avgTaskDuration + ' minutos';
-            if (elementsToUpdate.totalFocusTime) elementsToUpdate.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
-            if (elementsToUpdate.focusTimeValueDisplay) elementsToUpdate.focusTimeValueDisplay.textContent = stats.focusTime + ' minutos';
-            if (elementsToUpdate.completionRateValueDisplay) elementsToUpdate.completionRateValueDisplay.textContent = stats.completionRate + '%';
-            updateFocusTimeChart(stats.focusTime);
-            updateCompletionRateChart(stats.completionRate);
-          }
-          break;
       }
-    });
-    function updateFocusTimeChart(focusTimeMinutes) {
+      
+      function updateFocusTimeChart(focusTimeMinutes) {
         const ctx = document.getElementById('focusTimeChart')?.getContext('2d');
         if (!ctx) return;
         const primaryColor = getCssVariable('--primary');
@@ -990,8 +889,8 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     }
                 });
         }
-    }
-    function updateCompletionRateChart(completionRate) {
+      }
+      function updateCompletionRateChart(completionRate) {
         const ctx = document.getElementById('completionRateChart')?.getContext('2d');
         if (!ctx) return;
         const primaryColor = getCssVariable('--primary');
@@ -1045,7 +944,149 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     }
                 });
         }
-    }
+      }
+      
+      function filterTasks() {
+        const statusFilter = document.getElementById('filter-status');
+        const tagFilter = document.getElementById('filter-tag');
+        const categoryFilter = document.getElementById('filter-category');
+        const taskList = document.getElementById('task-list');
+        if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
+        const status = statusFilter.value;
+        const tag = tagFilter.value;
+        const category = categoryFilter.value;
+        Array.from(taskList.children).forEach(function(el) {
+          const elStatus = el.getAttribute('data-status');
+          const elTags = el.getAttribute('data-tag') || '';
+          const elCategory = el.getAttribute('data-category') || '';
+          let show = true;
+          if (status && elStatus !== status) show = false;
+          if (tag && !elTags.split(',').includes(tag)) show = false;
+          if (category && elCategory !== category) show = false;
+          el.style.display = show ? '' : 'none';
+        });
+      }
+
+      // Inicialização quando o DOM estiver pronto
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('Debug: DOM carregado');
+        
+        // Inicialização de elementos
+        const createTaskButton = document.getElementById('btn-create-task');
+        const focusModeButton = document.getElementById('btn-focus-mode');
+        const btnCreateTag = document.getElementById('btn-create-tag');
+        const btnCreateCategory = document.getElementById('btn-create-category');
+        const statusFilter = document.getElementById('filter-status');
+        const tagFilter = document.getElementById('filter-tag');
+        const categoryFilter = document.getElementById('filter-category');
+        const statsGrid = document.querySelector('.stats-grid');
+
+        console.log('Debug: Elementos encontrados:', {
+          createTaskButton: !!createTaskButton,
+          focusModeButton: !!focusModeButton,
+          btnCreateTag: !!btnCreateTag,
+          btnCreateCategory: !!btnCreateCategory
+        });
+
+        // Event Listeners
+        if (createTaskButton) {
+          createTaskButton.onclick = () => {
+            console.log('Debug: Clique em criar tarefa');
+            vscode.postMessage({ command: 'createTask' });
+          };
+        }
+
+        if (focusModeButton) {
+          focusModeButton.onclick = () => {
+            console.log('Debug: Clique em modo foco');
+            vscode.postMessage({ command: 'startFocus' });
+          };
+        }
+
+        if (btnCreateTag) {
+          btnCreateTag.onclick = () => {
+            console.log('Debug: Clique em criar tag');
+            vscode.postMessage({ command: 'createTag' });
+          };
+        }
+
+        if (btnCreateCategory) {
+          btnCreateCategory.onclick = () => {
+            console.log('Debug: Clique em criar categoria');
+            vscode.postMessage({ command: 'createCategory' });
+          };
+        }
+
+        // Filtros
+        if (statusFilter) statusFilter.addEventListener('change', filterTasks);
+        if (tagFilter) tagFilter.addEventListener('change', filterTasks);
+        if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
+
+        // Grid de estatísticas
+        if (statsGrid) {
+          statsGrid.addEventListener('click', (event) => {
+            const card = event.target.closest('.clickable-card');
+            if (card && card.dataset.action) {
+              vscode.postMessage({
+                command: 'dashboardCardClicked',
+                action: card.dataset.action
+              });
+            }
+          });
+        }
+
+        // Event handlers para botões de delete
+        document.querySelectorAll('.btn-delete-task').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const taskId = btn.getAttribute('data-task-id');
+            vscode.postMessage({ command: 'deleteTask', taskId });
+          });
+        });
+
+        document.querySelectorAll('.btn-delete-subtask').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const taskId = btn.getAttribute('data-task-id');
+            const subtaskId = btn.getAttribute('data-subtask-id');
+            vscode.postMessage({ command: 'deleteSubtask', taskId, subtaskId });
+          });
+        });
+      });
+
+      // Message handler
+      window.addEventListener('message', (event) => {
+        const message = event.data;
+        switch (message.type) {
+          case 'update':
+            if (message.stats) {
+              console.log('Debug: Atualização recebida', message.stats);
+              var stats = message.stats;
+              var elementsToUpdate = {
+                streak: document.getElementById('streak'),
+                tasksCompleted: document.getElementById('tasks-completed'),
+                mostProductiveHour: document.getElementById('most-productive-hour'),
+                bestDay: document.getElementById('best-day'),
+                avgTaskDuration: document.getElementById('avg-task-duration'),
+                totalFocusTime: document.getElementById('total-focus-time'),
+                focusTimeValueDisplay: document.getElementById('focus-time-value'),
+                completionRateValueDisplay: document.getElementById('completion-rate-value')
+              };
+              if (elementsToUpdate.streak) elementsToUpdate.streak.textContent = stats.streak + ' dias';
+              if (elementsToUpdate.tasksCompleted) elementsToUpdate.tasksCompleted.textContent = stats.tasksCompleted;
+              if (elementsToUpdate.mostProductiveHour) elementsToUpdate.mostProductiveHour.textContent = stats.mostProductiveHour ? stats.mostProductiveHour + 'h' : '--:--';
+              if (elementsToUpdate.bestDay) elementsToUpdate.bestDay.textContent = stats.bestDay || '--';
+              if (elementsToUpdate.avgTaskDuration) elementsToUpdate.avgTaskDuration.textContent = stats.avgTaskDuration + ' minutos';
+              if (elementsToUpdate.totalFocusTime) elementsToUpdate.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
+              if (elementsToUpdate.focusTimeValueDisplay) elementsToUpdate.focusTimeValueDisplay.textContent = stats.focusTime + ' minutos';
+              if (elementsToUpdate.completionRateValueDisplay) elementsToUpdate.completionRateValueDisplay.textContent = stats.completionRate + '%';
+              updateFocusTimeChart(stats.focusTime);
+              updateCompletionRateChart(stats.completionRate);
+            }
+            break;
+        }
+      });
+    })(); // IIFE para escopo isolado
   </script>
 </body>
 </html>
