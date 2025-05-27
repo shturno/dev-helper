@@ -6,6 +6,16 @@ import { ProductivityStats } from '../types/analytics';
 import { TaskStatus } from '../tasks/types';
 import { TagManager } from '../tasks/tag-manager';
 
+// Helper function to generate nonce
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
+
 export class DashboardView implements vscode.WebviewViewProvider {
     private webviewView: vscode.WebviewView | undefined;
     private disposables: vscode.Disposable[] = [];
@@ -242,6 +252,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
     }
 
     private getWebviewContent(): string {
+        const nonce = getNonce(); // Generate nonce for script security
         const tasks = this.taskTracker.getTasks();
         const tags = this.tagManager.getTags();
         const categories = this.tagManager.getCategories();
@@ -811,7 +822,7 @@ export class DashboardView implements vscode.WebviewViewProvider {
       </div>
     </section>
   </main>
-  <script>
+  <script nonce="${nonce}">
     (function() {
       const vscode = acquireVsCodeApi();
       let focusTimeChartInstance = null;
