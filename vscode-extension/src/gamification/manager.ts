@@ -943,6 +943,12 @@ export class GamificationManager {
                 await this.unlockAchievement('subtask_master');
             }
 
+            // Notificar streak a cada múltiplo de 5 dias
+            if (this.currentUserData.streak && this.currentUserData.streak % 5 === 0) {
+                const { Notifier } = await import('../notifications/notifier');
+                Notifier.congratulateStreak(this.currentUserData.streak);
+            }
+
             // Salvar estado atualizado
             await this.saveState();
             this.updateStatusBar();
@@ -952,4 +958,4 @@ export class GamificationManager {
             throw error;
         }
     }
-} 
+}

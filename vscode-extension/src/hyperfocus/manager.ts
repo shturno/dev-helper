@@ -205,6 +205,11 @@ export class HyperfocusManager {
                 await this.saveStats();
             }
 
+            if (duration > 50) {
+                const { Notifier } = await import('../notifications/notifier');
+                Notifier.suggestBreak();
+            }
+
             this.isActive = false;
             this.startTime = null;
             this.statusBarItem.hide();

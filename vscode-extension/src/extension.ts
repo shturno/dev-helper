@@ -140,6 +140,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         });
 
+        // Lembrete de foco a cada 1h se o modo hiperfoco não estiver ativo
+        setInterval(async () => {
+            if (!hyperfocusManager?.isActive) {
+                const { Notifier } = await import('./notifications/notifier');
+                Notifier.remindFocusMode();
+            }
+        }, 1000 * 60 * 60);
+
         logger.info('Extensão ativada com sucesso');
 
     } catch (error) {

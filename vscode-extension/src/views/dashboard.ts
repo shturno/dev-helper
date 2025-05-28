@@ -355,552 +355,557 @@ export class DashboardView implements vscode.WebviewViewProvider {
         }
         return `
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dev Helper Dashboard</title>
-  <link rel="stylesheet" href="https://microsoft.github.io/vscode-codicons/dist/codicon.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --radius: 6px; /* Slightly reduced radius for a sharper look */
-      --card-bg: var(--vscode-sideBar-background);
-      --card-border: var(--vscode-panel-border);
-      /* Softer shadow for a more modern feel */
-      --card-shadow: 0 1px 3px var(--vscode-widget-shadow, rgba(0,0,0,0.1)), 0 1px 2px var(--vscode-widget-shadow, rgba(0,0,0,0.06));
-      --card-shadow-hover: 0 4px 12px var(--vscode-widget-shadow, rgba(0,0,0,0.12)), 0 2px 6px var(--vscode-widget-shadow, rgba(0,0,0,0.08));
+<html lang="pt-BR" aria-label="Dev Helper Dashboard">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev Helper Dashboard</title>
+    <link rel="stylesheet" href="https://microsoft.github.io/vscode-codicons/dist/codicon.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+    <style>
+      :focus {
+        outline: 2px solid #0078d4;
+        outline-offset: 2px;
+      }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+      :root {
+        --radius: 6px; /* Slightly reduced radius for a sharper look */
+        --card-bg: var(--vscode-sideBar-background);
+        --card-border: var(--vscode-panel-border);
+        /* Softer shadow for a more modern feel */
+        --card-shadow: 0 1px 3px var(--vscode-widget-shadow, rgba(0,0,0,0.1)), 0 1px 2px var(--vscode-widget-shadow, rgba(0,0,0,0.06));
+        --card-shadow-hover: 0 4px 12px var(--vscode-widget-shadow, rgba(0,0,0,0.12)), 0 2px 6px var(--vscode-widget-shadow, rgba(0,0,0,0.08));
 
-      --primary: var(--vscode-button-background, var(--vscode-editor-selectionBackground));
-      --primary-fg: var(--vscode-button-foreground, var(--vscode-editor-foreground));
-      --input-bg: var(--vscode-input-background, var(--vscode-editorWidget-background));
-      --input-border: var(--vscode-input-border, var(--vscode-panel-border));
-      --muted: var(--vscode-editor-inactiveSelectionBackground);
-      --muted-fg: var(--vscode-descriptionForeground);
-      --accent: var(--vscode-editor-selectionHighlightBackground, #6c63ff); /* Keep accent for specific highlights */
-      --text-color: var(--vscode-editor-foreground);
-      --text-muted-color: var(--vscode-descriptionForeground);
-      --border-color: var(--vscode-panel-border);
-    }
+        --primary: var(--vscode-button-background, var(--vscode-editor-selectionBackground));
+        --primary-fg: var(--vscode-button-foreground, var(--vscode-editor-foreground));
+        --input-bg: var(--vscode-input-background, var(--vscode-editorWidget-background));
+        --input-border: var(--vscode-input-border, var(--vscode-panel-border));
+        --muted: var(--vscode-editor-inactiveSelectionBackground);
+        --muted-fg: var(--vscode-descriptionForeground);
+        --accent: var(--vscode-editor-selectionHighlightBackground, #6c63ff); /* Keep accent for specific highlights */
+        --text-color: var(--vscode-editor-foreground);
+        --text-muted-color: var(--vscode-descriptionForeground);
+        --border-color: var(--vscode-panel-border);
+      }
 
-    *, *::before, *::after {
-        box-sizing: border-box;
-    }
+      *, *::before, *::after {
+          box-sizing: border-box;
+      }
 
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--text-color);
-      background: var(--vscode-editor-background);
-      margin: 0;
-      padding: 0;
-      line-height: 1.6; /* Improved readability */
-    }
+      body {
+        font-family: var(--vscode-font-family);
+        color: var(--text-color);
+        background: var(--vscode-editor-background);
+        margin: 0;
+        padding: 0;
+        line-height: 1.6; /* Improved readability */
+      }
 
-    main {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 24px; /* Consistent padding */
-      display: flex;
-      flex-direction: column;
-      gap: 28px; /* Consistent gap */
-    }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px; /* Consistent padding */
+        display: flex;
+        flex-direction: column;
+        gap: 28px; /* Consistent gap */
+      }
 
-    .dashboard-header {
-      display: flex;
-      align-items: center;
-      gap: 10px; /* Slightly reduced gap */
-      margin-bottom: 16px; /* More space after header */
-    }
+      .dashboard-header {
+        display: flex;
+        align-items: center;
+        gap: 10px; /* Slightly reduced gap */
+        margin-bottom: 16px; /* More space after header */
+      }
 
-    .dashboard-header .codicon {
-      font-size: 1.8rem; /* Slightly smaller icon */
-      color: var(--primary);
-      opacity: 0.85; /* More visible */
-    }
+      .dashboard-header .codicon {
+        font-size: 1.8rem; /* Slightly smaller icon */
+        color: var(--primary);
+        opacity: 0.85; /* More visible */
+      }
 
-    .dashboard-title {
-      font-size: 1.8rem; /* Adjusted size */
-      font-weight: 600; /* Less aggressive weight */
-      letter-spacing: -0.5px; /* Softer letter spacing */
-      color: var(--text-color);
-    }
+      .dashboard-title {
+        font-size: 1.8rem; /* Adjusted size */
+        font-weight: 600; /* Less aggressive weight */
+        letter-spacing: -0.5px; /* Softer letter spacing */
+        color: var(--text-color);
+      }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Slightly smaller minmax */
-      gap: 16px; /* Reduced gap */
-    }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Slightly smaller minmax */
+        gap: 16px; /* Reduced gap */
+      }
 
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
-      box-shadow: var(--card-shadow);
-      padding: 16px; /* Adjusted padding */
-      display: flex;
-      flex-direction: column;
-      gap: 6px; /* Reduced gap inside card */
-      min-height: 120px; /* Adjusted min-height to accommodate charts */
-      position: relative;
-      transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
-    }
-    
-    .card.chart-card { /* Specific class for cards containing charts */
-        padding: 12px; /* Less padding if chart has its own */
-        justify-content: space-between; /* Align title top, chart/desc bottom */
-    }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        box-shadow: var(--card-shadow);
+        padding: 16px; /* Adjusted padding */
+        display: flex;
+        flex-direction: column;
+        gap: 6px; /* Reduced gap inside card */
+        min-height: 120px; /* Adjusted min-height to accommodate charts */
+        position: relative;
+        transition: box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out, border-color 0.2s ease-in-out;
+      }
+      
+      .card.chart-card { /* Specific class for cards containing charts */
+          padding: 12px; /* Less padding if chart has its own */
+          justify-content: space-between; /* Align title top, chart/desc bottom */
+      }
 
-    .card:hover {
-      box-shadow: var(--card-shadow-hover);
-      transform: translateY(-2px); /* Subtle lift effect */
-    }
-    
-    .card.clickable-card:hover {
-        /* More pronounced hover for clickable cards */
-        border-color: var(--accent); 
-        /* background-color: color-mix(in srgb, var(--card-bg) 95%, var(--accent) 5%); */ /* Subtle bg change if desired */
-    }
-    
-    .clickable-card {
-        cursor: pointer;
-    }
+      .card:hover {
+        box-shadow: var(--card-shadow-hover);
+        transform: translateY(-2px); /* Subtle lift effect */
+      }
+      
+      .card.clickable-card:hover {
+          /* More pronounced hover for clickable cards */
+          border-color: var(--accent); 
+          /* background-color: color-mix(in srgb, var(--card-bg) 95%, var(--accent) 5%); */ /* Subtle bg change if desired */
+      }
+      
+      .clickable-card {
+          cursor: pointer;
+      }
 
-    .card .codicon { /* Icon for non-chart cards */
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      font-size: 1.6rem; /* Adjusted size */
-      opacity: 0.25; /* Slightly more visible but still subtle */
-      pointer-events: none;
-    }
-    
-    .card-title { /* Applies to all cards */
-      margin: 0;
-      font-size: 0.9rem; /* Slightly smaller */
-      color: var(--text-muted-color);
-      font-weight: 500;
-      line-height: 1.4;
-    }
+      .card .codicon { /* Icon for non-chart cards */
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        font-size: 1.6rem; /* Adjusted size */
+        opacity: 0.25; /* Slightly more visible but still subtle */
+        pointer-events: none;
+      }
+      
+      .card-title { /* Applies to all cards */
+        margin: 0;
+        font-size: 0.9rem; /* Slightly smaller */
+        color: var(--text-muted-color);
+        font-weight: 500;
+        line-height: 1.4;
+      }
 
-    .card-value { /* For non-chart cards */
-      margin: 0;
-      font-size: 1.8rem; /* Slightly smaller for balance */
-      font-weight: 600; /* Less aggressive than bold */
-      color: var(--text-color);
-      line-height: 1.2;
-    }
+      .card-value { /* For non-chart cards */
+        margin: 0;
+        font-size: 1.8rem; /* Slightly smaller for balance */
+        font-weight: 600; /* Less aggressive than bold */
+        color: var(--text-color);
+        line-height: 1.2;
+      }
 
-    .card-desc { /* For non-chart cards and general descriptions */
-      color: var(--text-muted-color);
-      font-size: 0.85rem; /* Slightly smaller */
-      line-height: 1.4;
-    }
+      .card-desc { /* For non-chart cards and general descriptions */
+        color: var(--text-muted-color);
+        font-size: 0.85rem; /* Slightly smaller */
+        line-height: 1.4;
+      }
 
-    .chart-container {
-        flex-grow: 1;
-        position: relative; /* For canvas absolute positioning if needed */
-        display: flex; /* Center canvas */
-        align-items: center; /* Center canvas */
-        justify-content: center; /* Center canvas */
-        margin-top: 8px; /* Space between title and chart */
-        min-height: 80px; /* Ensure space for chart rendering */
-    }
+      .chart-container {
+          flex-grow: 1;
+          position: relative; /* For canvas absolute positioning if needed */
+          display: flex; /* Center canvas */
+          align-items: center; /* Center canvas */
+          justify-content: center; /* Center canvas */
+          margin-top: 8px; /* Space between title and chart */
+          min-height: 80px; /* Ensure space for chart rendering */
+      }
 
-    .chart-container canvas {
-        max-width: 100%;
-        max-height: 100%; /* Ensure canvas is responsive within container */
-    }
+      .chart-container canvas {
+          max-width: 100%;
+          max-height: 100%; /* Ensure canvas is responsive within container */
+      }
 
 
-    .section {
-      /* margin-top: 12px; removed, using main gap */
-      /* margin-bottom: 8px; removed, using main gap */
-    }
+      .section {
+        /* margin-top: 12px; removed, using main gap */
+        /* margin-bottom: 8px; removed, using main gap */
+      }
 
-    .section-title {
-      font-size: 1.3rem; /* Slightly larger for better hierarchy */
-      font-weight: 600;
-      margin-bottom: 12px; /* Increased space */
-      color: var(--text-color);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .filters {
-      display: flex;
-      gap: 10px; /* Adjusted gap */
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 16px; /* More space */
-      padding: 10px; /* Adjusted padding */
-      background-color: var(--vscode-textInput-background, var(--vscode-editorWidget-background)); /* Use more specific var if available */
-      border-radius: var(--radius);
-      border: 1px solid var(--border-color);
-    }
-
-    .filters label {
-      font-size: 0.9rem;
-      color: var(--text-muted-color);
-      margin-right: 2px; /* Reduced margin */
-    }
-
-    .filters select, .filters button {
-      border-radius: var(--radius);
-      border: 1px solid var(--input-border);
-      background: var(--input-bg);
-      color: var(--text-color);
-      padding: 5px 8px; /* Adjusted padding */
-      font-size: 0.9em; /* Adjusted font size */
-      /* margin-right: 4px; Handled by gap in .filters */
-    }
-    
-    .filters select:focus, .filters button:focus {
-        outline: 1px solid var(--vscode-focusBorder, var(--primary)); /* VSCode style focus */
-        outline-offset: -1px;
-    }
-
-    .filters button {
-      background: var(--primary);
-      color: var(--primary-fg);
-      border: 1px solid transparent; /* Adding border for consistency, transparent for primary */
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px; /* Icon-text gap */
-      font-weight: 500;
-      transition: background-color 0.2s ease-in-out;
-    }
-
-    .filters button:hover {
-      background: var(--vscode-button-hoverBackground, var(--accent)); /* Use VS Code hover if available */
-    }
-    
-    .filters button .codicon {
-        font-size: 1em; /* Adjust icon size in buttons */
-    }
-
-    .tag, .category {
-      display: inline-flex; /* For better alignment if icons were added */
-      align-items: center;
-      padding: 2px 8px; /* Adjusted padding */
-      border-radius: 12px; /* More pill-like */
-      font-size: 0.8rem; /* Smaller font */
-      margin: 2px; /* Simpler margin */
-      color: var(--vscode-button-foreground); /* Ensure contrast, fallback if needed */
-      font-weight: 500;
-      line-height: 1.4; /* Added line-height */
-      /* Background color is set inline */
-    }
-
-    .tag-list, .category-list {
-      margin: 0; /* Reset margin, handled by grid gap */
-      padding: 12px;
-      background: var(--vscode-editorWidget-background, var(--card-bg)); /* Subtle background */
-      border-radius: var(--radius);
-      border: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      gap: 8px; /* Space between header and items */
-    }
-    
-    .tag-list h3, .category-list h3 {
-        margin: 0 0 4px 0; /* Adjusted margin */
-        font-size: 1em; /* Base size */
+      .section-title {
+        font-size: 1.3rem; /* Slightly larger for better hierarchy */
         font-weight: 600;
+        margin-bottom: 12px; /* Increased space */
         color: var(--text-color);
         display: flex;
         align-items: center;
-        gap: 6px; /* Icon and text gap */
-    }
-    .tag-list h3 .codicon, .category-list h3 .codicon {
-        font-size: 1.1em; /* Slightly larger icon */
-    }
-
-
-    .tag-item, .category-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 4px; /* Spacing between items */
-      gap: 8px;
-      padding: 6px; /* Add some padding */
-      border-radius: var(--radius);
-      transition: background-color 0.15s ease-in-out;
-    }
-    .tag-item:hover, .category-item:hover {
-        background-color: var(--vscode-list-hoverBackground, var(--muted));
-    }
-    
-    .tag-name, .category-name { /* For bolding the name */
-        font-weight: 600;
-        color: var(--text-color);
-        font-size: 0.9em;
-    }
-    .tag-desc, .category-desc { /* For the description */
-        font-size: 0.85em;
-        margin-left: 2px; /* Align with name after color swatch */
-    }
-
-
-    .tag-color, .category-color {
-      width: 14px; /* Slightly smaller */
-      height: 14px;
-      border-radius: 50%;
-      /* margin-right: 4px; Handled by gap */
-      border: 1px solid var(--border-color);
-      flex-shrink: 0; /* Prevent shrinking */
-    }
-
-    .task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px; /* Reduced gap */
-      margin-top: 0; /* section-title has margin-bottom */
-    }
-
-    .task-item {
-      background: var(--vscode-editorWidget-background);
-      border: 1px solid var(--border-color);
-      border-left: 3px solid var(--border-color); /* Default left border */
-      border-radius: var(--radius);
-      padding: 12px 14px; /* Adjusted padding */
-      box-shadow: var(--card-shadow);
-      /* margin-bottom: 2px; Handled by gap in .task-list */
-      position: relative;
-      transition: box-shadow 0.2s ease-in-out, border-left-color 0.2s ease-in-out; /* Animate border color */
-    }
-    
-    .task-item:hover {
-        box-shadow: var(--card-shadow-hover);
-        border-left-color: var(--accent); /* Accent color on hover */
-    }
-
-    .task-item.current {
-      border-left: 3px solid var(--primary); /* Emphasize with a thicker left border */
-      box-shadow: var(--card-shadow-hover); /* Add shadow to current task */
-    }
-
-    .task-item h3 {
-      margin: 0 0 6px 0; /* Adjusted margin */
-      font-size: 1.05rem; /* Slightly adjusted */
-      font-weight: 600;
-      color: var(--text-color);
-    }
-
-    .task-tags {
-      margin-bottom: 8px; /* Increased margin */
-      display: flex; /* Enable wrapping for many tags */
-      flex-wrap: wrap;
-      gap: 6px; /* Increased gap for tags */
-    }
-
-    .task-info {
-      font-size: 0.85rem; /* Slightly smaller */
-      color: var(--text-muted-color);
-      margin-bottom: 8px; /* More space before progress */
-      line-height: 1.5;
-    }
-    
-    .task-info span { /* Individual info items */
-        margin-right: 6px; /* Space between items */
-        display: inline-block; /* Ensure proper spacing */
-    }
-    
-    .task-info span:last-child {
-        margin-right: 0;
-    }
-
-
-    .task-progress {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 10px; /* Adjusted margin */
-    }
-
-    .progress-bar {
-      flex-grow: 1; /* Allow progress bar to take available space */
-      height: 6px; /* Thinner bar */
-      background: var(--muted);
-      border-radius: 3px; /* Rounded to match height */
-      overflow: hidden;
-    }
-
-    .progress {
-      height: 100%;
-      background: var(--primary); /* Simpler background, can be gradient if preferred */
-      border-radius: 3px;
-      transition: width 0.4s cubic-bezier(.4,1.4,.6,1);
-    }
-    
-    .task-progress span { /* Percentage text */
-        font-size: 0.85rem;
-        color: var(--text-muted-color);
-        font-weight: 500;
-    }
-    
-    .tag-category-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-    }
-
-
-    @media (max-width: 768px) { /* Adjusted breakpoint */
-      main { 
-        padding: 16px; /* Less padding on smaller screens */
-        gap: 20px; 
-      }
-      .stats-grid { 
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Smaller cards on mobile */
-        gap: 12px;
-      }
-      .dashboard-title {
-        font-size: 1.6rem;
-      }
-      .section-title {
-        font-size: 1.15rem;
-      }
-      .filters {
-        padding: 10px;
         gap: 8px;
       }
-      .filters select, .filters button {
-        padding: 5px 8px;
-        font-size: 0.9em;
-      }
-      .task-item h3 {
-        font-size: 1rem;
-      }
-      .tag-category-grid {
-        grid-template-columns: 1fr; /* Stack tag/category lists */
-      }
-    }
 
-    @media (max-width: 480px) {
-        .stats-grid {
-            grid-template-columns: 1fr; /* Single column for very small screens */
+      .filters {
+        display: flex;
+        gap: 10px; /* Adjusted gap */
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 16px; /* More space */
+        padding: 10px; /* Adjusted padding */
+        background-color: var(--vscode-textInput-background, var(--vscode-editorWidget-background)); /* Use more specific var if available */
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+      }
+
+      .filters label {
+        font-size: 0.9rem;
+        color: var(--text-muted-color);
+        margin-right: 2px; /* Reduced margin */
+      }
+
+      .filters select, .filters button {
+        border-radius: var(--radius);
+        border: 1px solid var(--input-border);
+        background: var(--input-bg);
+        color: var(--text-color);
+        padding: 5px 8px; /* Adjusted padding */
+        font-size: 0.9em; /* Adjusted font size */
+        /* margin-right: 4px; Handled by gap in .filters */
+      }
+      
+      .filters select:focus, .filters button:focus {
+          outline: 1px solid var(--vscode-focusBorder, var(--primary)); /* VSCode style focus */
+          outline-offset: -1px;
+      }
+
+      .filters button {
+        background: var(--primary);
+        color: var(--primary-fg);
+        border: 1px solid transparent; /* Adding border for consistency, transparent for primary */
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px; /* Icon-text gap */
+        font-weight: 500;
+        transition: background-color 0.2s ease-in-out;
+      }
+
+      .filters button:hover {
+        background: var(--vscode-button-hoverBackground, var(--accent)); /* Use VS Code hover if available */
+      }
+      
+      .filters button .codicon {
+          font-size: 1em; /* Adjust icon size in buttons */
+      }
+
+      .tag, .category {
+        display: inline-flex; /* For better alignment if icons were added */
+        align-items: center;
+        padding: 2px 8px; /* Adjusted padding */
+        border-radius: 12px; /* More pill-like */
+        font-size: 0.8rem; /* Smaller font */
+        margin: 2px; /* Simpler margin */
+        color: var(--vscode-button-foreground); /* Ensure contrast, fallback if needed */
+        font-weight: 500;
+        line-height: 1.4; /* Added line-height */
+        /* Background color is set inline */
+      }
+
+      .tag-list, .category-list {
+        margin: 0; /* Reset margin, handled by grid gap */
+        padding: 12px;
+        background: var(--vscode-editorWidget-background, var(--card-bg)); /* Subtle background */
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 8px; /* Space between header and items */
+      }
+      
+      .tag-list h3, .category-list h3 {
+          margin: 0 0 4px 0; /* Adjusted margin */
+          font-size: 1em; /* Base size */
+          font-weight: 600;
+          color: var(--text-color);
+          display: flex;
+          align-items: center;
+          gap: 6px; /* Icon and text gap */
+      }
+      .tag-list h3 .codicon, .category-list h3 .codicon {
+          font-size: 1.1em; /* Slightly larger icon */
+      }
+
+
+      .tag-item, .category-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 4px; /* Spacing between items */
+        gap: 8px;
+        padding: 6px; /* Add some padding */
+        border-radius: var(--radius);
+        transition: background-color 0.15s ease-in-out;
+      }
+      .tag-item:hover, .category-item:hover {
+          background-color: var(--vscode-list-hoverBackground, var(--muted));
+      }
+      
+      .tag-name, .category-name { /* For bolding the name */
+          font-weight: 600;
+          color: var(--text-color);
+          font-size: 0.9em;
+      }
+      .tag-desc, .category-desc { /* For the description */
+          font-size: 0.85em;
+          margin-left: 2px; /* Align with name after color swatch */
+      }
+
+
+      .tag-color, .category-color {
+        width: 14px; /* Slightly smaller */
+        height: 14px;
+        border-radius: 50%;
+        /* margin-right: 4px; Handled by gap */
+        border: 1px solid var(--border-color);
+        flex-shrink: 0; /* Prevent shrinking */
+      }
+
+      .task-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px; /* Reduced gap */
+        margin-top: 0; /* section-title has margin-bottom */
+      }
+
+      .task-item {
+        background: var(--vscode-editorWidget-background);
+        border: 1px solid var(--border-color);
+        border-left: 3px solid var(--border-color); /* Default left border */
+        border-radius: var(--radius);
+        padding: 12px 14px; /* Adjusted padding */
+        box-shadow: var(--card-shadow);
+        /* margin-bottom: 2px; Handled by gap in .task-list */
+        position: relative;
+        transition: box-shadow 0.2s ease-in-out, border-left-color 0.2s ease-in-out; /* Animate border color */
+      }
+      
+      .task-item:hover {
+          box-shadow: var(--card-shadow-hover);
+          border-left-color: var(--accent); /* Accent color on hover */
+      }
+
+      .task-item.current {
+        border-left: 3px solid var(--primary); /* Emphasize with a thicker left border */
+        box-shadow: var(--card-shadow-hover); /* Add shadow to current task */
+      }
+
+      .task-item h3 {
+        margin: 0 0 6px 0; /* Adjusted margin */
+        font-size: 1.05rem; /* Slightly adjusted */
+        font-weight: 600;
+        color: var(--text-color);
+      }
+
+      .task-tags {
+        margin-bottom: 8px; /* Increased margin */
+        display: flex; /* Enable wrapping for many tags */
+        flex-wrap: wrap;
+        gap: 6px; /* Increased gap for tags */
+      }
+
+      .task-info {
+        font-size: 0.85rem; /* Slightly smaller */
+        color: var(--text-muted-color);
+        margin-bottom: 8px; /* More space before progress */
+        line-height: 1.5;
+      }
+      
+      .task-info span { /* Individual info items */
+          margin-right: 6px; /* Space between items */
+          display: inline-block; /* Ensure proper spacing */
+      }
+      
+      .task-info span:last-child {
+          margin-right: 0;
+      }
+
+
+      .task-progress {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px; /* Adjusted margin */
+      }
+
+      .progress-bar {
+        flex-grow: 1; /* Allow progress bar to take available space */
+        height: 6px; /* Thinner bar */
+        background: var(--muted);
+        border-radius: 3px; /* Rounded to match height */
+        overflow: hidden;
+      }
+
+      .progress {
+        height: 100%;
+        background: var(--primary); /* Simpler background, can be gradient if preferred */
+        border-radius: 3px;
+        transition: width 0.4s cubic-bezier(.4,1.4,.6,1);
+      }
+      
+      .task-progress span { /* Percentage text */
+          font-size: 0.85rem;
+          color: var(--text-muted-color);
+          font-weight: 500;
+      }
+      
+      .tag-category-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+      }
+
+
+      @media (max-width: 768px) { /* Adjusted breakpoint */
+        main { 
+          padding: 16px; /* Less padding on smaller screens */
+          gap: 20px; 
         }
-        .dashboard-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
-            margin-bottom: 12px;
+        .stats-grid { 
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Smaller cards on mobile */
+          gap: 12px;
         }
-        .dashboard-header .codicon {
-            font-size: 1.6rem;
+        .dashboard-title {
+          font-size: 1.6rem;
         }
-         .dashboard-title {
-            font-size: 1.5rem;
+        .section-title {
+          font-size: 1.15rem;
         }
         .filters {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        .filters label {
-            margin-bottom: 2px; /* Space out labels in column layout */
+          padding: 10px;
+          gap: 8px;
         }
         .filters select, .filters button {
-            width: 100%; /* Full width controls in column layout */
+          padding: 5px 8px;
+          font-size: 0.9em;
         }
-    }
+        .task-item h3 {
+          font-size: 1rem;
+        }
+        .tag-category-grid {
+          grid-template-columns: 1fr; /* Stack tag/category lists */
+        }
+      }
 
-    .main-action-btn {
-      background: linear-gradient(90deg, var(--primary) 60%, var(--accent) 100%);
-      color: var(--primary-fg);
-      border: none;
-      border-radius: var(--radius);
-      padding: 9px 22px;
-      font-size: 1.08em;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px 0 rgba(60,60,60,0.08);
-      transition: background 0.2s, box-shadow 0.2s, color 0.2s, transform 0.1s;
-      margin-left: 0;
-      margin-right: 0;
-    }
-    .main-action-btn + .main-action-btn {
-      margin-left: 12px;
-    }
-    .main-action-btn:hover, .main-action-btn:focus {
-      background: linear-gradient(90deg, var(--accent) 60%, var(--primary) 100%);
-      color: var(--primary-fg);
-      box-shadow: 0 4px 16px 0 rgba(60,60,60,0.13);
-      transform: translateY(-1px) scale(1.03);
-    }
+      @media (max-width: 480px) {
+          .stats-grid {
+              grid-template-columns: 1fr; /* Single column for very small screens */
+          }
+          .dashboard-header {
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 4px;
+              margin-bottom: 12px;
+          }
+          .dashboard-header .codicon {
+              font-size: 1.6rem;
+          }
+           .dashboard-title {
+              font-size: 1.5rem;
+          }
+          .filters {
+              flex-direction: column;
+              align-items: stretch;
+          }
+          .filters label {
+              margin-bottom: 2px; /* Space out labels in column layout */
+          }
+          .filters select, .filters button {
+              width: 100%; /* Full width controls in column layout */
+          }
+      }
 
-    .custom-checkbox {
-      display: inline-flex;
-      align-items: center;
-      cursor: pointer;
-      font-size: 1em;
-      user-select: none;
-      position: relative;
-      padding-left: 32px;
-      margin-bottom: 0;
-      min-height: 28px;
-      line-height: 1.2;
-    }
-    .custom-checkbox input[type="checkbox"] {
-      opacity: 0;
-      position: absolute;
-      left: 0;
-      top: 50%;
-      width: 22px;
-      height: 22px;
-      margin: 0;
-      z-index: 2;
-      cursor: pointer;
-      transform: translateY(-50%);
-    }
-    .custom-checkbox .checkmark {
-      position: absolute;
-      left: 0;
-      top: 50%;
-      height: 22px;
-      width: 22px;
-      background-color: var(--input-bg);
-      border: 2px solid var(--primary);
-      border-radius: 6px;
-      transition: background 0.2s, border 0.2s;
-      box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: translateY(-50%);
-    }
-    .custom-checkbox input[type="checkbox"]:checked ~ .checkmark {
-      background-color: var(--primary);
-      border-color: var(--accent);
-    }
-    .custom-checkbox .checkmark:after {
-      content: '';
-      display: none;
-      width: 7px;
-      height: 13px;
-      border: solid var(--primary-fg);
-      border-width: 0 3px 3px 0;
-      border-radius: 1px;
-      position: absolute;
-      left: 7px;
-      top: 2px;
-      transform: rotate(45deg);
-    }
-    .custom-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
-      display: block;
-    }
-    .custom-checkbox input[type="checkbox"]:disabled ~ .checkmark {
-      background: var(--muted);
-      border-color: var(--input-border);
-      opacity: 0.7;
-    }
+      .main-action-btn {
+        background: linear-gradient(90deg, var(--primary) 60%, var(--accent) 100%);
+        color: var(--primary-fg);
+        border: none;
+        border-radius: var(--radius);
+        padding: 9px 22px;
+        font-size: 1.08em;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px 0 rgba(60,60,60,0.08);
+        transition: background 0.2s, box-shadow 0.2s, color 0.2s, transform 0.1s;
+        margin-left: 0;
+        margin-right: 0;
+      }
+      .main-action-btn + .main-action-btn {
+        margin-left: 12px;
+      }
+      .main-action-btn:hover, .main-action-btn:focus {
+        background: linear-gradient(90deg, var(--accent) 60%, var(--primary) 100%);
+        color: var(--primary-fg);
+        box-shadow: 0 4px 16px 0 rgba(60,60,60,0.13);
+        transform: translateY(-1px) scale(1.03);
+      }
 
-  </style>
-</head>
-<body>
+      .custom-checkbox {
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        font-size: 1em;
+        user-select: none;
+        position: relative;
+        padding-left: 32px;
+        margin-bottom: 0;
+        min-height: 28px;
+        line-height: 1.2;
+      }
+      .custom-checkbox input[type="checkbox"] {
+        opacity: 0;
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        z-index: 2;
+        cursor: pointer;
+        transform: translateY(-50%);
+      }
+      .custom-checkbox .checkmark {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        height: 22px;
+        width: 22px;
+        background-color: var(--input-bg);
+        border: 2px solid var(--primary);
+        border-radius: 6px;
+        transition: background 0.2s, border 0.2s;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: translateY(-50%);
+      }
+      .custom-checkbox input[type="checkbox"]:checked ~ .checkmark {
+        background-color: var(--primary);
+        border-color: var(--accent);
+      }
+      .custom-checkbox .checkmark:after {
+        content: '';
+        display: none;
+        width: 7px;
+        height: 13px;
+        border: solid var(--primary-fg);
+        border-width: 0 3px 3px 0;
+        border-radius: 1px;
+        position: absolute;
+        left: 7px;
+        top: 2px;
+        transform: rotate(45deg);
+      }
+      .custom-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+        display: block;
+      }
+      .custom-checkbox input[type="checkbox"]:disabled ~ .checkmark {
+        background: var(--muted);
+        border-color: var(--input-border);
+        opacity: 0.7;
+      }
+
+    </style>
+  </head>
+  <body tabindex="0">
     <script>
       window.tags = ${JSON.stringify(tags)};
       window.categories = ${JSON.stringify(categories)};

@@ -5,6 +5,7 @@ import { GamificationManager, UserData } from '../gamification/manager';
 import { PriorityManager } from './priority-manager';
 import { PrioritySuggestionManager } from './priority-suggestions';
 import { TagManager } from './tag-manager';
+import { Notifier } from '../notifications/notifier';
 
 // Constantes de validação
 const MAX_TITLE_LENGTH = 100;
@@ -767,13 +768,8 @@ export class TaskTracker {
             if (allCompleted) {
                 this.currentTask.status = TaskStatus.COMPLETED;
                 this.currentTask.completedAt = new Date();
-                
-                // Adicionar ao histórico de tarefas
                 this.prioritySuggestionManager.addToHistory(this.currentTask, actualTimeSpent);
-
-                // Notificar o sistema de gamificação
                 if (this.gamificationManager) {
-                    // Atualizar estatísticas
                     const userData = await this.context.globalState.get<UserData>('dev-helper-gamification-data');
                     if (userData) {
                         await this.context.globalState.update('dev-helper-gamification-data', {
@@ -782,12 +778,10 @@ export class TaskTracker {
                             totalSubtasks: (userData.totalSubtasks || 0) + this.currentTask.subtasks.length
                         });
                     }
-
-                    // Adicionar XP e verificar conquistas
                     await this.gamificationManager.onTaskCompleted(this.currentTask);
                 }
-
-                vscode.window.showInformationMessage('Parabéns! Tarefa concluída! 🎉');
+                const { Notifier } = await import('../notifications/notifier');
+                Notifier.congratulateTaskCompletion(this.currentTask.title);
             }
         }
     }

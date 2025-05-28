@@ -1,6 +1,9 @@
 # Ignore build output
 /dist/
 
+# Ignore docs
+/docs/
+
 # Ignore dependencies
 /node_modules/
 
@@ -26,3 +29,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+
+# Ignore Roadmap files
+roadmap.md

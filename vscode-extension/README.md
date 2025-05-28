@@ -1,5 +1,7 @@
 # Dev Helper
 
+![Dashboard Preview](./media/captura-28052025.png)
+
 A Visual Studio Code extension designed to help developers maintain focus and boost productivity through task management, focus sessions, and productivity analytics.
 
 ## Features
@@ -145,5 +147,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - You can delete all your data at any time via the extension interface or by uninstalling the extension.
 
 For details, see the linked policy files above.
+
+## Accessibility
+
+- High contrast themes available (light, dark, high-contrast)
+- Keyboard navigation supported in all dialogs and dashboard
+- ARIA labels and roles in webview UI
+- Visual focus indicators for all interactive elements
+- All icons and images have alt text
+- Designed for screen reader compatibility
+- If you have accessibility needs or suggestions, please open an issue
 
 ---
