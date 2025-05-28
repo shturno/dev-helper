@@ -185,7 +185,13 @@ export class DashboardView implements vscode.WebviewViewProvider {
         webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = this.getWebviewContent();
         webviewView.webview.onDidReceiveMessage(async (message) => {
-            switch (message.command) {
+            const { validateWebviewMessage } = await import('../utils/security');
+            const safeMessage = validateWebviewMessage(message);
+            if (!safeMessage) {
+                console.warn('Mensagem do webview inválida ou potencialmente maliciosa:', message);
+                return;
+            }
+            switch (safeMessage.command) {
                 case 'startFocus':
                     if (this.hyperfocusManager.isActive) {
                         await this.hyperfocusManager.deactivateHyperfocus();
@@ -195,7 +201,6 @@ export class DashboardView implements vscode.WebviewViewProvider {
                         await this.hyperfocusManager.activateHyperfocus({ reason: 'manual' });
                         await vscode.commands.executeCommand('workbench.action.closeSidebar');
                         await vscode.commands.executeCommand('workbench.action.closePanel');
-                        // Opcional: impedir reabertura (simples: fecha de novo se abrir)
                         const closeSidebar = vscode.window.onDidChangeWindowState(() => {
                             if (this.hyperfocusManager.isActive) {
                                 vscode.commands.executeCommand('workbench.action.closeSidebar');
@@ -211,14 +216,14 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     this.update();
                     break;
                 case 'deleteTask':
-                    if (message.taskId) {
-                        await this.taskTracker.deleteTask(Number(message.taskId));
+                    if (safeMessage.taskId) {
+                        await this.taskTracker.deleteTask(Number(safeMessage.taskId));
                         this.update();
                     }
                     break;
                 case 'deleteSubtask':
-                    if (message.taskId && message.subtaskId) {
-                        await this.taskTracker.deleteSubtask(Number(message.taskId), Number(message.subtaskId));
+                    if (safeMessage.taskId && safeMessage.subtaskId) {
+                        await this.taskTracker.deleteSubtask(Number(safeMessage.taskId), Number(safeMessage.subtaskId));
                         this.update();
                     }
                     break;
@@ -233,42 +238,42 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     this.update();
                     break;
                 case 'deleteTag':
-                    if (message.tag) {
-                        await this.tagManager.deleteTag(message.tag);
+                    if (safeMessage.tag) {
+                        await this.tagManager.deleteTag(safeMessage.tag);
                         await this.tagManager.reloadTags();
                         this.update();
                     }
                     break;
                 case 'editTag':
-                    if (message.tag) {
-                        await this.tagManager.editTag(message.tag);
+                    if (safeMessage.tag) {
+                        await this.tagManager.editTag(safeMessage.tag);
                         await this.tagManager.reloadTags();
                         this.update();
                     }
                     break;
                 case 'deleteCategory':
-                    if (message.category) {
-                        await this.tagManager.deleteCategory(message.category);
+                    if (safeMessage.category) {
+                        await this.tagManager.deleteCategory(safeMessage.category);
                         await this.tagManager.reloadCategories();
                         this.update();
                     }
                     break;
                 case 'editCategory':
-                    if (message.category) {
-                        await this.tagManager.editCategory(message.category);
+                    if (safeMessage.category) {
+                        await this.tagManager.editCategory(safeMessage.category);
                         await this.tagManager.reloadCategories();
                         this.update();
                     }
                     break;
                 case 'editTask':
-                    if (message.taskId) {
-                        await this.taskTracker.editTask(Number(message.taskId));
+                    if (safeMessage.taskId) {
+                        await this.taskTracker.editTask(Number(safeMessage.taskId));
                         this.update();
                     }
                     break;
                 case 'editSubtask':
-                    if (message.taskId && message.subtaskId) {
-                        await this.taskTracker.editSubtask(Number(message.taskId), Number(message.subtaskId));
+                    if (safeMessage.taskId && safeMessage.subtaskId) {
+                        await this.taskTracker.editSubtask(Number(safeMessage.taskId), Number(safeMessage.subtaskId));
                         this.update();
                     }
                     break;

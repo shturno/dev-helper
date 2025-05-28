@@ -1,0 +1,28 @@
+# Ignore build output
+/dist/
+
+# Ignore dependencies
+/node_modules/
+
+# Ignore test coverage
+/coverage/
+
+# Ignore TypeScript build info
+/tsconfig.tsbuildinfo
+
+# Ignore VS Code extension package files
+*.vsix
+
+# Ignore logs
+*.log
+
+# Ignore environment files
+.env*
+
+# Ignore OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
