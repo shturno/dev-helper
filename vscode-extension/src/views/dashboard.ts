@@ -1104,7 +1104,13 @@ export class DashboardView implements vscode.WebviewViewProvider {
           const hasSubtasks = taskElem && taskElem.querySelectorAll('.subtask-checkbox').length > 0;
           if (!hasSubtasks) {
             if (cb.checked) vscode.postMessage({ command: 'completeTask', taskId: id });
-            // O backend já faz update() e a barra vai para 100%
+            // Atualiza barra e texto imediatamente
+            const bar = taskElem.querySelector('.progress');
+            const percent = taskElem.querySelector('.task-progress span');
+            if (bar && percent) {
+              bar.style.width = cb.checked ? '100%' : '0%';
+              percent.textContent = cb.checked ? '100%' : '0%';
+            }
           } else {
             // Só permite marcar se todas subtarefas estiverem completas
             const allDone = Array.from(taskElem.querySelectorAll('.subtask-checkbox')).every(sub => sub.checked);
@@ -1113,13 +1119,36 @@ export class DashboardView implements vscode.WebviewViewProvider {
             } else {
               cb.checked = allDone;
             }
+            // Atualiza barra e texto imediatamente
+            const bar = taskElem.querySelector('.progress');
+            const percent = taskElem.querySelector('.task-progress span');
+            const total = taskElem.querySelectorAll('.subtask-checkbox').length;
+            const done = taskElem.querySelectorAll('.subtask-checkbox:checked').length;
+            const pct = total ? Math.round((done/total)*100) : 0;
+            if (bar && percent) {
+              bar.style.width = pct + '%';
+              percent.textContent = pct + '%';
+            }
           }
         }));
-        // Checkbox de subtarefa: ao marcar, backend atualiza status e update() reflete progresso
         document.querySelectorAll('.subtask-checkbox').forEach(cb => cb.addEventListener('change', function() {
           const taskId = cb.getAttribute('data-task-id');
           const subId = cb.getAttribute('data-subtask-id');
           if (cb.checked) vscode.postMessage({ command: 'completeSubtask', taskId, subtaskId: subId });
+          // Atualiza barra e texto imediatamente
+          const taskElem = cb.closest('.task-item');
+          const bar = taskElem.querySelector('.progress');
+          const percent = taskElem.querySelector('.task-progress span');
+          const total = taskElem.querySelectorAll('.subtask-checkbox').length;
+          const done = taskElem.querySelectorAll('.subtask-checkbox:checked').length;
+          const pct = total ? Math.round((done/total)*100) : 0;
+          if (bar && percent) {
+            bar.style.width = pct + '%';
+            percent.textContent = pct + '%';
+          }
+          // Se todas subtarefas completas, marca checkbox principal
+          const mainCb = taskElem.querySelector('.task-checkbox');
+          if (mainCb) mainCb.checked = (done === total);
         }));
       })();
     </script>
