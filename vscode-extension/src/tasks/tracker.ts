@@ -1020,13 +1020,40 @@ export class TaskTracker {
     public async deleteSubtask(taskId: number, subtaskId: number): Promise<void> {
         const task = this.tasks.find(t => t.id === taskId);
         if (task) {
-            const subIndex = task.subtasks.findIndex(s => s.id === subtaskId);
-            if (subIndex !== -1) {
-                task.subtasks.splice(subIndex, 1);
-                task.updatedAt = new Date();
-                await this.saveTasks();
-                this.updateDashboard();
-            }
+            task.subtasks = task.subtasks.filter(s => s.id !== subtaskId);
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    /**
+     * Rename an existing task
+     */
+    public async editTask(taskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        const newTitle = await vscode.window.showInputBox({ prompt: 'Novo título da tarefa', value: task.title });
+        if (newTitle) {
+            task.title = sanitizeHtml(newTitle);
+            task.updatedAt = new Date();
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    /**
+     * Rename an existing subtask
+     */
+    public async editSubtask(taskId: number, subtaskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        const sub = task.subtasks.find(s => s.id === subtaskId);
+        if (!sub) return;
+        const newTitle = await vscode.window.showInputBox({ prompt: 'Novo título da subtarefa', value: sub.title });
+        if (newTitle) {
+            sub.title = sanitizeHtml(newTitle);
+            await this.saveTasks();
+            this.updateDashboard();
         }
     }
 

@@ -182,13 +182,10 @@ export class TagManager {
         try {
             const confirm = await vscode.window.showWarningMessage(
                 `Tem certeza que deseja excluir a tag "${tag.name}"?`,
-                { modal: true },
                 'Sim',
                 'Não'
             );
-
             if (confirm !== 'Sim') return false;
-
             this.tags = this.tags.filter(t => t.id !== tag.id);
             await this.saveTags();
             return true;
@@ -351,11 +348,9 @@ export class TagManager {
         try {
             const confirm = await vscode.window.showWarningMessage(
                 `Tem certeza que deseja excluir a categoria "${category.name}"?`,
-                { modal: true },
                 'Sim',
                 'Não'
             );
-
             if (confirm !== 'Sim') return false;
 
             // Verificar se existem tarefas usando esta categoria
