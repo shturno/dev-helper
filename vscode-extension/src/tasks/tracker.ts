@@ -5,7 +5,6 @@ import { GamificationManager, UserData } from '../gamification/manager';
 import { PriorityManager } from './priority-manager';
 import { PrioritySuggestionManager } from './priority-suggestions';
 import { TagManager } from './tag-manager';
-import { Notifier } from '../notifications/notifier';
 
 // Constantes de validação
 const MAX_TITLE_LENGTH = 100;
