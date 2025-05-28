@@ -906,11 +906,12 @@ export class DashboardView implements vscode.WebviewViewProvider {
     </style>
   </head>
   <body tabindex="0">
+    <a href="#main-content" class="sr-only" tabindex="0">Pular para o conteúdo principal</a>
     <script>
       window.tags = ${JSON.stringify(tags)};
       window.categories = ${JSON.stringify(categories)};
     </script>
-    <main>
+    <main id="main-content">
       <header class="dashboard-header">
         <span class="codicon codicon-dashboard"></span>
         <span class="dashboard-title">Dev Helper Dashboard</span>
@@ -924,8 +925,8 @@ export class DashboardView implements vscode.WebviewViewProvider {
               </div>
               <div id="focus-time-value" class="card-desc" style="text-align:center; margin-top: 4px;">0 minutos</div>
           </div>
-          <div class="card clickable-card" data-action="view-streak-details"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
-          <div class="card clickable-card" data-action="view-completed-tasks-details"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
+          <div class="card clickable-card" data-action="view-streak-details" role="button" tabindex="0" aria-label="Ver detalhes da sequência"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
+          <div class="card clickable-card" data-action="view-completed-tasks-details" role="button" tabindex="0" aria-label="Ver tarefas concluídas"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
           <div class="card chart-card">
               <div class="card-title"><span class="codicon codicon-rocket" style="margin-right: 4px;"></span>Taxa de Conclusão</div>
               <div class="chart-container">
@@ -933,10 +934,10 @@ export class DashboardView implements vscode.WebviewViewProvider {
               </div>
               <div id="completion-rate-value" class="card-desc" style="text-align:center; margin-top: 4px;">0%</div>
           </div>
-          <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
-          <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
-          <div class="card clickable-card" data-action="view-task-duration-details"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
-          <div class="card clickable-card" data-action="view-total-focus-details"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
+          <div class="card clickable-card" data-action="view-productivity-timing-details" role="button" tabindex="0" aria-label="Ver hora mais produtiva"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
+          <div class="card clickable-card" data-action="view-productivity-timing-details" role="button" tabindex="0" aria-label="Ver melhor dia"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
+          <div class="card clickable-card" data-action="view-task-duration-details" role="button" tabindex="0" aria-label="Ver duração média"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
+          <div class="card clickable-card" data-action="view-total-focus-details" role="button" tabindex="0" aria-label="Ver tempo total de foco"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
         </div>
       </section>
       <section aria-label="Filtros e ações" class="section">
@@ -1067,6 +1068,16 @@ export class DashboardView implements vscode.WebviewViewProvider {
             const card = event.target.closest('.clickable-card');
             if (card && card.dataset.action) {
               vscode.postMessage({ command: 'dashboardCardClicked', action: card.dataset.action });
+            }
+          });
+          // Acessibilidade: ativar cards com Enter/Espaço
+          statsGrid.addEventListener('keydown', (event) => {
+            if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('clickable-card')) {
+              event.preventDefault();
+              const card = event.target;
+              if (card && card.dataset.action) {
+                vscode.postMessage({ command: 'dashboardCardClicked', action: card.dataset.action });
+              }
             }
           });
         }
