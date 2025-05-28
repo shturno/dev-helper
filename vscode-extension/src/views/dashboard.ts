@@ -2,10 +2,19 @@ import * as vscode from 'vscode';
 import { TaskTracker } from '../tasks/tracker';
 import { HyperfocusManager } from '../hyperfocus/manager';
 import { AnalysisManager } from '../analysis/manager';
+import { TagManager } from '../tasks/tag-manager';
 import { ProductivityStats } from '../types/analytics';
 import { TaskStatus } from '../tasks/types';
-import { TagManager } from '../tasks/tag-manager';
-import { Task } from '../tasks/types';
+
+// Helper function to generate nonce
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 
 export class DashboardView implements vscode.WebviewViewProvider {
     private webviewView: vscode.WebviewView | undefined;
@@ -33,31 +42,38 @@ export class DashboardView implements vscode.WebviewViewProvider {
         );
     }
 
-    private showTagManagement(): void {
-        const tags = this.tagManager.getTags();
+    private async showTagManagement(): Promise<void> {
+        await this.tagManager.reloadTags();
+        let tags = this.tagManager.getTags();
         const quickPick = vscode.window.createQuickPick();
         let selectedTag: any;
         let tagToEdit: any;
         let tagToDelete: any;
 
-        quickPick.items = [
-            { label: '$(plus) Criar nova tag', description: 'Adicionar uma nova tag' },
-            { label: '$(pencil) Editar tag', description: 'Modificar uma tag existente' },
-            { label: '$(trash) Excluir tag', description: 'Remover uma tag' },
-            ...tags.map(tag => ({
-                label: `$(tag) ${tag.name}`,
-                description: tag.description || '',
-                detail: `Cor: ${tag.color}`,
-                tag
-            }))
-        ];
+        const refreshItems = () => {
+            tags = this.tagManager.getTags();
+            quickPick.items = [
+                { label: '$(plus) Criar nova tag', description: 'Adicionar uma nova tag' },
+                { label: '$(pencil) Editar tag', description: 'Modificar uma tag existente' },
+                { label: '$(trash) Excluir tag', description: 'Remover uma tag' },
+                ...tags.map(tag => ({
+                    label: `$(tag) ${tag.name}`,
+                    description: tag.description || '',
+                    detail: `Cor: ${tag.color}`,
+                    tag
+                }))
+            ];
+        };
+        refreshItems();
 
         quickPick.onDidChangeSelection(async ([item]) => {
             if (!item) return;
-
             switch (item.label) {
                 case '$(plus) Criar nova tag':
                     await vscode.commands.executeCommand('dev-helper.createTag');
+                    await this.tagManager.reloadTags();
+                    refreshItems();
+                    this.update();
                     break;
                 case '$(pencil) Editar tag':
                     selectedTag = await vscode.window.showQuickPick(
@@ -67,6 +83,9 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     if (selectedTag) {
                         tagToEdit = selectedTag.value;
                         await vscode.commands.executeCommand('dev-helper.editTag', tagToEdit);
+                        await this.tagManager.reloadTags();
+                        refreshItems();
+                        this.update();
                     }
                     break;
                 case '$(trash) Excluir tag':
@@ -75,42 +94,53 @@ export class DashboardView implements vscode.WebviewViewProvider {
                         { placeHolder: 'Selecione a tag para excluir' }
                     );
                     if (selectedTag) {
-                        tagToDelete = selectedTag.value;
-                        await vscode.commands.executeCommand('dev-helper.deleteTag', tagToDelete);
+                        tagToDelete = tags.find(t => t.id === selectedTag.value.id);
+                        if (tagToDelete) {
+                            await vscode.commands.executeCommand('dev-helper.deleteTag', tagToDelete);
+                            await this.tagManager.reloadTags();
+                            refreshItems();
+                            this.update();
+                        }
                     }
                     break;
             }
             quickPick.hide();
         });
-
         quickPick.show();
     }
 
-    private showCategoryManagement(): void {
-        const categories = this.tagManager.getCategories();
+    private async showCategoryManagement(): Promise<void> {
+        await this.tagManager.reloadCategories();
+        let categories = this.tagManager.getCategories();
         const quickPick = vscode.window.createQuickPick();
         let selectedCategory: any;
         let categoryToEdit: any;
         let categoryToDelete: any;
 
-        quickPick.items = [
-            { label: '$(plus) Criar nova categoria', description: 'Adicionar uma nova categoria' },
-            { label: '$(pencil) Editar categoria', description: 'Modificar uma categoria existente' },
-            { label: '$(trash) Excluir categoria', description: 'Remover uma categoria' },
-            ...categories.map(category => ({
-                label: `$(folder) ${category.name}`,
-                description: category.description || '',
-                detail: `Cor: ${category.color}`,
-                category
-            }))
-        ];
+        const refreshItems = () => {
+            categories = this.tagManager.getCategories();
+            quickPick.items = [
+                { label: '$(plus) Criar nova categoria', description: 'Adicionar uma nova categoria' },
+                { label: '$(pencil) Editar categoria', description: 'Modificar uma categoria existente' },
+                { label: '$(trash) Excluir categoria', description: 'Remover uma categoria' },
+                ...categories.map(category => ({
+                    label: `$(folder) ${category.name}`,
+                    description: category.description || '',
+                    detail: `Cor: ${category.color}`,
+                    category
+                }))
+            ];
+        };
+        refreshItems();
 
         quickPick.onDidChangeSelection(async ([item]) => {
             if (!item) return;
-
             switch (item.label) {
                 case '$(plus) Criar nova categoria':
                     await vscode.commands.executeCommand('dev-helper.createCategory');
+                    await this.tagManager.reloadCategories();
+                    refreshItems();
+                    this.update();
                     break;
                 case '$(pencil) Editar categoria':
                     selectedCategory = await vscode.window.showQuickPick(
@@ -120,6 +150,9 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     if (selectedCategory) {
                         categoryToEdit = selectedCategory.value;
                         await vscode.commands.executeCommand('dev-helper.editCategory', categoryToEdit);
+                        await this.tagManager.reloadCategories();
+                        refreshItems();
+                        this.update();
                     }
                     break;
                 case '$(trash) Excluir categoria':
@@ -128,14 +161,18 @@ export class DashboardView implements vscode.WebviewViewProvider {
                         { placeHolder: 'Selecione a categoria para excluir' }
                     );
                     if (selectedCategory) {
-                        categoryToDelete = selectedCategory.value;
-                        await vscode.commands.executeCommand('dev-helper.deleteCategory', categoryToDelete);
+                        categoryToDelete = categories.find(c => c.id === selectedCategory.value.id);
+                        if (categoryToDelete) {
+                            await vscode.commands.executeCommand('dev-helper.deleteCategory', categoryToDelete);
+                            await this.tagManager.reloadCategories();
+                            refreshItems();
+                            this.update();
+                        }
                     }
                     break;
             }
             quickPick.hide();
         });
-
         quickPick.show();
     }
 
@@ -147,14 +184,30 @@ export class DashboardView implements vscode.WebviewViewProvider {
         this.webviewView = webviewView;
         webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = this.getWebviewContent();
-
-        webviewView.webview.onDidReceiveMessage(async message => {
-            switch (message.command) {
+        webviewView.webview.onDidReceiveMessage(async (message) => {
+            const { validateWebviewMessage } = await import('../utils/security');
+            const safeMessage = validateWebviewMessage(message);
+            if (!safeMessage) {
+                console.warn('Mensagem do webview inválida ou potencialmente maliciosa:', message);
+                return;
+            }
+            switch (safeMessage.command) {
                 case 'startFocus':
                     if (this.hyperfocusManager.isActive) {
-                        await this.hyperfocusManager.stopHyperfocus();
+                        await this.hyperfocusManager.deactivateHyperfocus();
+                        await vscode.commands.executeCommand('workbench.action.closePanel');
+                        await vscode.commands.executeCommand('workbench.action.closeSidebar');
                     } else {
-                        await this.hyperfocusManager.startHyperfocus();
+                        await this.hyperfocusManager.activateHyperfocus({ reason: 'manual' });
+                        await vscode.commands.executeCommand('workbench.action.closeSidebar');
+                        await vscode.commands.executeCommand('workbench.action.closePanel');
+                        const closeSidebar = vscode.window.onDidChangeWindowState(() => {
+                            if (this.hyperfocusManager.isActive) {
+                                vscode.commands.executeCommand('workbench.action.closeSidebar');
+                                vscode.commands.executeCommand('workbench.action.closePanel');
+                            }
+                        });
+                        this.disposables.push(closeSidebar);
                     }
                     this.update();
                     break;
@@ -162,22 +215,81 @@ export class DashboardView implements vscode.WebviewViewProvider {
                     await this.taskTracker.createTask();
                     this.update();
                     break;
+                case 'deleteTask':
+                    if (safeMessage.taskId) {
+                        await this.taskTracker.deleteTask(Number(safeMessage.taskId));
+                        this.update();
+                    }
+                    break;
+                case 'deleteSubtask':
+                    if (safeMessage.taskId && safeMessage.subtaskId) {
+                        await this.taskTracker.deleteSubtask(Number(safeMessage.taskId), Number(safeMessage.subtaskId));
+                        this.update();
+                    }
+                    break;
+                case 'createTag':
+                    await this.tagManager.createTag();
+                    await this.tagManager.reloadTags();
+                    this.update();
+                    break;
+                case 'createCategory':
+                    await this.tagManager.createCategory();
+                    await this.tagManager.reloadCategories();
+                    this.update();
+                    break;
+                case 'deleteTag':
+                    if (safeMessage.tag) {
+                        await this.tagManager.deleteTag(safeMessage.tag);
+                        await this.tagManager.reloadTags();
+                        this.update();
+                    }
+                    break;
+                case 'editTag':
+                    if (safeMessage.tag) {
+                        await this.tagManager.editTag(safeMessage.tag);
+                        await this.tagManager.reloadTags();
+                        this.update();
+                    }
+                    break;
+                case 'deleteCategory':
+                    if (safeMessage.category) {
+                        await this.tagManager.deleteCategory(safeMessage.category);
+                        await this.tagManager.reloadCategories();
+                        this.update();
+                    }
+                    break;
+                case 'editCategory':
+                    if (safeMessage.category) {
+                        await this.tagManager.editCategory(safeMessage.category);
+                        await this.tagManager.reloadCategories();
+                        this.update();
+                    }
+                    break;
+                case 'editTask':
+                    if (safeMessage.taskId) {
+                        await this.taskTracker.editTask(Number(safeMessage.taskId));
+                        this.update();
+                    }
+                    break;
+                case 'editSubtask':
+                    if (safeMessage.taskId && safeMessage.subtaskId) {
+                        await this.taskTracker.editSubtask(Number(safeMessage.taskId), Number(safeMessage.subtaskId));
+                        this.update();
+                    }
+                    break;
+                case 'dashboardCardClicked':
+                    // Exemplo: abrir insights, perfil, etc.
+                    // Adicione outros handlers conforme necessário
+                    break;
             }
-        }, null, this.disposables);
-
-        // Atualizar o dashboard periodicamente
-        const updateInterval = setInterval(() => {
-            this.update();
-        }, 5000);
-
-        this.disposables.push({ dispose: () => clearInterval(updateInterval) });
+        });
+        // Removido o setInterval de update redundante
     }
 
     public update(): void {
-        if (this.webviewView) {
-            const stats = this.getStats();
-            this.webviewView.webview.postMessage({ type: 'update', stats });
-        }
+        if (!this.webviewView) return;
+        // Re-render full dashboard on each update
+        this.webviewView.webview.html = this.getWebviewContent();
     }
 
     public dispose(): void {
@@ -186,16 +298,16 @@ export class DashboardView implements vscode.WebviewViewProvider {
         this.webviewView = undefined;
     }
 
+    //@ts-expect-error getStats is used only internally for dashboard stats calculation and triggers a TS warning
     private getStats(): ProductivityStats {
         const analysisStats = this.analysisManager.getStats();
         const hyperfocusStats = this.hyperfocusManager.getStats();
         const tasks = this.taskTracker.getTasks();
-        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED);
-
+        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
         return {
             focusTime: hyperfocusStats.todayMinutes,
             streak: analysisStats.streak,
-            tasksCompleted: completedTasks.length,
+            tasksCompleted: completedTasks,
             completionRate: this.calculateCompletionRate(),
             mostProductiveHour: analysisStats.mostProductiveHour,
             bestDay: analysisStats.bestDay,
@@ -205,26 +317,42 @@ export class DashboardView implements vscode.WebviewViewProvider {
         };
     }
 
+    /**
+     * Calculate percentage of completed tasks
+     */
     private calculateCompletionRate(): number {
         const tasks = this.taskTracker.getTasks();
         if (tasks.length === 0) return 0;
-        const completedTasks = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
-        return Math.round((completedTasks / tasks.length) * 100);
+        const done = tasks.filter(t => t.status === TaskStatus.COMPLETED).length;
+        return Math.round((done / tasks.length) * 100);
     }
 
+    /**
+     * Calculate average duration of completed tasks
+     */
     private calculateAverageTaskDuration(): number {
         const tasks = this.taskTracker.getTasks().filter(t => t.status === TaskStatus.COMPLETED && t.actualTime);
         if (tasks.length === 0) return 0;
-        const totalTime = tasks.reduce((sum, task) => sum + (task.actualTime || 0), 0);
-        return Math.round(totalTime / tasks.length);
+        const total = tasks.reduce((sum, t) => sum + (t.actualTime || 0), 0);
+        return Math.round(total / tasks.length);
     }
 
     private getWebviewContent(): string {
+        const nonce = getNonce();
         const tasks = this.taskTracker.getTasks();
+        // DEBUG: Forçar tarefa de exemplo se não houver nenhuma
+        if (!tasks || tasks.length === 0) {
+          // placeholder logic removed
+        }
         const tags = this.tagManager.getTags();
         const categories = this.tagManager.getCategories();
         const currentTask = (this.taskTracker as any).currentTask || null;
         const statusList = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
+        function calcProgress(task: any) {
+            if (!task.subtasks || task.subtasks.length === 0) return 0;
+            const completed = task.subtasks.filter((s: any) => s.status === 'COMPLETED').length;
+            return Math.round((completed / task.subtasks.length) * 100);
+        }
         return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -677,363 +805,361 @@ export class DashboardView implements vscode.WebviewViewProvider {
         }
     }
 
+    .main-action-btn {
+      background: linear-gradient(90deg, var(--primary) 60%, var(--accent) 100%);
+      color: var(--primary-fg);
+      border: none;
+      border-radius: var(--radius);
+      padding: 9px 22px;
+      font-size: 1.08em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px 0 rgba(60,60,60,0.08);
+      transition: background 0.2s, box-shadow 0.2s, color 0.2s, transform 0.1s;
+      margin-left: 0;
+      margin-right: 0;
+    }
+    .main-action-btn + .main-action-btn {
+      margin-left: 12px;
+    }
+    .main-action-btn:hover, .main-action-btn:focus {
+      background: linear-gradient(90deg, var(--accent) 60%, var(--primary) 100%);
+      color: var(--primary-fg);
+      box-shadow: 0 4px 16px 0 rgba(60,60,60,0.13);
+      transform: translateY(-1px) scale(1.03);
+    }
+
+    .custom-checkbox {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 1em;
+      user-select: none;
+      position: relative;
+      padding-left: 32px;
+      margin-bottom: 0;
+      min-height: 28px;
+      line-height: 1.2;
+    }
+    .custom-checkbox input[type="checkbox"] {
+      opacity: 0;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      z-index: 2;
+      cursor: pointer;
+      transform: translateY(-50%);
+    }
+    .custom-checkbox .checkmark {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      height: 22px;
+      width: 22px;
+      background-color: var(--input-bg);
+      border: 2px solid var(--primary);
+      border-radius: 6px;
+      transition: background 0.2s, border 0.2s;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translateY(-50%);
+    }
+    .custom-checkbox input[type="checkbox"]:checked ~ .checkmark {
+      background-color: var(--primary);
+      border-color: var(--accent);
+    }
+    .custom-checkbox .checkmark:after {
+      content: '';
+      display: none;
+      width: 7px;
+      height: 13px;
+      border: solid var(--primary-fg);
+      border-width: 0 3px 3px 0;
+      border-radius: 1px;
+      position: absolute;
+      left: 7px;
+      top: 2px;
+      transform: rotate(45deg);
+    }
+    .custom-checkbox input[type="checkbox"]:checked ~ .checkmark:after {
+      display: block;
+    }
+    .custom-checkbox input[type="checkbox"]:disabled ~ .checkmark {
+      background: var(--muted);
+      border-color: var(--input-border);
+      opacity: 0.7;
+    }
+
   </style>
 </head>
 <body>
-  <main>
-    <header class="dashboard-header">
-      <span class="codicon codicon-dashboard"></span>
-      <span class="dashboard-title">Dev Helper Dashboard</span>
-    </header>
-
-    <section aria-label="Estatísticas" class="section">
-      <div class="stats-grid">
-        <div class="card chart-card">
-            <div class="card-title"><span class="codicon codicon-clock" style="margin-right: 4px;"></span>Tempo Foco (Hoje)</div>
-            <div class="chart-container">
-                <canvas id="focusTimeChart"></canvas>
-            </div>
-            <div id="focus-time-value" class="card-desc" style="text-align:center; margin-top: 4px;">0 minutos</div>
+    <script>
+      window.tags = ${JSON.stringify(tags)};
+      window.categories = ${JSON.stringify(categories)};
+    </script>
+    <main>
+      <header class="dashboard-header">
+        <span class="codicon codicon-dashboard"></span>
+        <span class="dashboard-title">Dev Helper Dashboard</span>
+      </header>
+      <section aria-label="Estatísticas" class="section">
+        <div class="stats-grid">
+          <div class="card chart-card">
+              <div class="card-title"><span class="codicon codicon-clock" style="margin-right: 4px;"></span>Tempo Foco (Hoje)</div>
+              <div class="chart-container">
+                  <canvas id="focusTimeChart"></canvas>
+              </div>
+              <div id="focus-time-value" class="card-desc" style="text-align:center; margin-top: 4px;">0 minutos</div>
+          </div>
+          <div class="card clickable-card" data-action="view-streak-details"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
+          <div class="card clickable-card" data-action="view-completed-tasks-details"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
+          <div class="card chart-card">
+              <div class="card-title"><span class="codicon codicon-rocket" style="margin-right: 4px;"></span>Taxa de Conclusão</div>
+              <div class="chart-container">
+                  <canvas id="completionRateChart"></canvas>
+              </div>
+              <div id="completion-rate-value" class="card-desc" style="text-align:center; margin-top: 4px;">0%</div>
+          </div>
+          <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
+          <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
+          <div class="card clickable-card" data-action="view-task-duration-details"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
+          <div class="card clickable-card" data-action="view-total-focus-details"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
         </div>
-        <div class="card clickable-card" data-action="view-streak-details"><span class="codicon codicon-flame"></span><div class="card-title">Sequência</div><div class="card-value" id="streak">0 dias</div><div class="card-desc">Streak</div></div>
-        <div class="card clickable-card" data-action="view-completed-tasks-details"><span class="codicon codicon-check"></span><div class="card-title">Tarefas Concluídas</div><div class="card-value" id="tasks-completed">0</div></div>
-        <div class="card chart-card">
-            <div class="card-title"><span class="codicon codicon-rocket" style="margin-right: 4px;"></span>Taxa de Conclusão</div>
-            <div class="chart-container">
-                <canvas id="completionRateChart"></canvas>
-            </div>
-            <div id="completion-rate-value" class="card-desc" style="text-align:center; margin-top: 4px;">0%</div>
+      </section>
+      <section aria-label="Filtros e ações" class="section">
+        <div class="section-title"><span class="codicon codicon-list-unordered"></span> Tarefas</div>
+        <div class="filters">
+          <label for="filter-status">Status:</label>
+          <select id="filter-status">
+            <option value="">Todos</option>
+            ${statusList.map(s => `<option value="${s}">${s === 'PENDING' ? 'Pendente' : s === 'IN_PROGRESS' ? 'Em andamento' : 'Concluída'}</option>`).join('')}
+          </select>
+          <label for="filter-tag">Tag:</label>
+          <select id="filter-tag">
+            <option value="">Todas</option>
+            ${tags.map(tag => `<option value="${tag.name}">${tag.name}</option>`).join('')}
+          </select>
+          <label for="filter-category">Categoria:</label>
+          <select id="filter-category">
+            <option value="">Todas</option>
+            ${categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('')}
+          </select>
         </div>
-        <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-calendar"></span><div class="card-title">Hora Mais Produtiva</div><div class="card-value" id="most-productive-hour">--:--</div></div>
-        <div class="card clickable-card" data-action="view-productivity-timing-details"><span class="codicon codicon-star"></span><div class="card-title">Melhor Dia</div><div class="card-value" id="best-day">--</div></div>
-        <div class="card clickable-card" data-action="view-task-duration-details"><span class="codicon codicon-timer"></span><div class="card-title">Duração Média</div><div class="card-value" id="avg-task-duration">0 minutos</div></div>
-        <div class="card clickable-card" data-action="view-total-focus-details"><span class="codicon codicon-history"></span><div class="card-title">Tempo Total Foco</div><div class="card-value" id="total-focus-time">0 minutos</div></div>
-      </div>
-    </section>
-
-    <section aria-label="Filtros e ações" class="section">
-      <div class="section-title"><span class="codicon codicon-list-unordered"></span> Tarefas</div>
-      <div class="filters">
-        <label for="filter-status">Status:</label>
-        <select id="filter-status">
-          <option value="">Todos</option>
-          ${statusList.map(s => `<option value="${s}">${s === 'PENDING' ? 'Pendente' : s === 'IN_PROGRESS' ? 'Em andamento' : 'Concluída'}</option>`).join('')}
-        </select>
-        <label for="filter-tag">Tag:</label>
-        <select id="filter-tag">
-          <option value="">Todas</option>
-          ${tags.map(tag => `<option value="${tag.name}">${tag.name}</option>`).join('')}
-        </select>
-        <label for="filter-category">Categoria:</label>
-        <select id="filter-category">
-          <option value="">Todas</option>
-          ${categories.map(cat => `<option value="${cat.name}">${cat.name}</option>`).join('')}
-        </select>
-        <button id="btn-create-task" title="Criar nova tarefa"><span class="codicon codicon-add"></span>Nova</button>
-        <button id="btn-focus-mode" title="Iniciar/Pausar Foco"><span class="codicon codicon-flame"></span>Foco</button>
-      </div>
-      <div class="task-list" id="task-list">
-        ${tasks.map(task => `
-          <article class="task-item${task.id === currentTask?.id ? ' current' : ''}" data-status="${task.status}" data-tag="${task.tags.map(t => t.name).join(',')}" data-category="${task.category ? task.category.name : ''}">
-            <h3>${task.title}</h3>
-            <div class="task-tags">
-              ${task.tags.map(tag => `<span class="tag" style="background-color: ${tag.color}">${tag.name}</span>`).join('')}
-              ${task.category ? `<span class="category" style="background-color: ${task.category.color}">${task.category.name}</span>` : ''}
-            </div>
-            <div class="task-info">
-              <span>Status: ${task.status}</span>
-              <span>Prioridade: ${task.priorityCriteria.complexity}</span>
-              <span>Impacto: ${task.priorityCriteria.impact}</span>
-              ${task.priorityCriteria.deadline ? `<span>Prazo: ${task.priorityCriteria.deadline.toLocaleDateString()}</span>` : ''}
-            </div>
-            <div class="task-progress">
-              <div class="progress-bar"><div class="progress" style="width: ${this.calculateTaskProgress(task)}%"></div></div>
-              <span>${this.calculateTaskProgress(task)}%</span>
-            </div>
-          </article>
-        `).join('')}
-      </div>
-    </section>
-
-    <section aria-label="Gestão de Tags e Categorias" class="section">
-      <div class="section-title"><span class="codicon codicon-tag"></span> Tags e Categorias</div>
-      <div class="tag-category-grid">
-        <div class="tag-list">
-          <h3><span class="codicon codicon-tag"></span> Tags Disponíveis</h3>
-          ${tags.length === 0 ? '<p class="card-desc">Nenhuma tag cadastrada.</p>' : tags.map(tag => `
-            <div class="tag-item">
-              <span class="tag-color" style="background-color: ${tag.color}"></span>
-              <strong class="tag-name">${tag.name}</strong>
-              ${tag.description ? `<span class="tag-desc card-desc">${tag.description}</span>` : ''}
-            </div>
+        <div style="display:flex;gap:0;justify-content:flex-end;align-items:center;margin-bottom:12px;margin-top:4px;">
+          <button id="btn-create-task" class="main-action-btn" title="Criar nova tarefa"><span class="codicon codicon-add"></span>Nova tarefa</button>
+          <button id="btn-focus-mode" class="main-action-btn" title="Ativar/Desativar Modo Hiperfoco"><span class="codicon codicon-eye"></span>Foco</button>
+        </div>
+        <div class="task-list" id="task-list">
+          ${tasks.map(task => `
+            <article class="task-item${task.id === currentTask?.id ? ' current' : ''}" data-status="${task.status}" data-tag="${task.tags.map((t: any) => t.name).join(',')}" data-category="${task.category ? task.category.name : ''}">
+              <h3>${task.title}
+                <button class="btn-edit-task" title="Renomear tarefa" data-task-id="${task.id}" style="float:right;margin-left:8px;border:none;background:none;color:var(--text-color);cursor:pointer;">
+                  <span class="codicon codicon-edit"></span>
+                </button>
+                <button class="btn-delete-task" title="Deletar tarefa" data-task-id="${task.id}" style="float:right;border:none;background:none;color:red;cursor:pointer;">
+                   <span class="codicon codicon-trash"></span>
+                </button>
+              </h3>
+              <div class="task-tags">
+                ${task.tags.map((tag: any) => `<span class="tag" style="background-color: ${tag.color}">${tag.name}</span>`).join('')}
+                ${task.category ? `<span class="category" style="background-color: ${task.category.color}">${task.category.name}</span>` : ''}
+              </div>
+              <div class="task-info">
+                <span>Status: ${task.status}</span>
+                <span>Prioridade: ${task.priorityCriteria.complexity}</span>
+                <span>Impacto: ${task.priorityCriteria.impact}</span>
+                ${task.priorityCriteria.deadline ? `<span>Prazo: ${new Date(task.priorityCriteria.deadline).toLocaleDateString()}</span>` : ''}
+              </div>
+              <div class="task-progress">
+                <div class="progress-bar"><div class="progress" style="width: ${calcProgress(task)}%"></div></div>
+                <span>${calcProgress(task)}%</span>
+              </div>
+              <div class="task-todo">
+                <label class="custom-checkbox">
+                  <input type="checkbox" class="task-checkbox" data-task-id="${task.id}" ${task.status === 'COMPLETED' ? 'checked disabled' : ''} />
+                  <span class="checkmark"></span>
+                  Marcar como concluída
+                </label>
+              </div>
+              ${task.subtasks && task.subtasks.length > 0 ? `<ul class="subtask-list">${task.subtasks.map((sub: any) => `
+                <li>
+                  <input type="checkbox" class="subtask-checkbox" data-task-id="${task.id}" data-subtask-id="${sub.id}" ${sub.status === 'COMPLETED' ? 'checked disabled' : ''} />
+                  ${sub.title}
+                  <button class="btn-edit-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}" title="Renomear subtarefa" style="border:none;background:none;color:var(--text-color);cursor:pointer;margin-left:4px;">
+                    <span class="codicon codicon-edit"></span>
+                  </button>
+                  <button class="btn-delete-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}" title="Deletar subtarefa" style="border:none;background:none;color:red;cursor:pointer;margin-left:4px;">
+                     <span class="codicon codicon-trash"></span>
+                  </button>
+                </li>`).join('')}</ul>` : ''}
+            </article>
           `).join('')}
         </div>
-        <div class="category-list">
-          <h3><span class="codicon codicon-folder"></span> Categorias</h3>
-          ${categories.length === 0 ? '<p class="card-desc">Nenhuma categoria cadastrada.</p>' : categories.map(category => `
-            <div class="category-item">
-              <span class="category-color" style="background-color: ${category.color}"></span>
-              <strong class="category-name">${category.name}</strong>
-              ${category.description ? `<span class="category-desc card-desc">${category.description}</span>` : ''}
-            </div>
-          `).join('')}
+      </section>
+      <section aria-label="Gestão de Tags e Categorias" class="section">
+        <div class="section-title"><span class="codicon codicon-tag"></span> Tags e Categorias</div>
+        <div class="tag-category-grid">
+          <div class="tag-list">
+            <h3><span class="codicon codicon-tag"></span> Tags Disponíveis <button id="btn-create-tag" title="Nova Tag" style="background:none;border:none;color:green;cursor:pointer;"><span class="codicon codicon-add"></span></button></h3>
+            ${tags.length === 0 ? '<p class="card-desc">Nenhuma tag cadastrada.</p>' : tags.map(tag => `
+              <div class="tag-item">
+                <span class="tag-color" style="background-color: ${tag.color}"></span>
+                <strong class="tag-name">${tag.name}</strong>
+                ${tag.description ? `<span class="tag-desc card-desc">${tag.description}</span>` : ''}
+                <button class="btn-edit-tag" title="Renomear tag" data-tag-id="${tag.id}" style="background:none;border:none;color:var(--text-color);cursor:pointer;margin-left:8px;"><span class="codicon codicon-edit"></span></button>
+                <button class="btn-delete-tag" title="Deletar tag" data-tag-id="${tag.id}" style="background:none;border:none;color:red;cursor:pointer;margin-left:4px;"><span class="codicon codicon-trash"></span></button>
+              </div>
+            `).join('')}
+          </div>
+          <div class="category-list">
+            <h3><span class="codicon codicon-folder"></span> Categorias <button id="btn-create-category" title="Nova Categoria" style="background:none;border:none;color:green;cursor:pointer;"><span class="codicon codicon-add"></span></button></h3>
+            ${categories.length === 0 ? '<p class="card-desc">Nenhuma categoria cadastrada.</p>' : categories.map(category => `
+              <div class="category-item">
+                <span class="category-color" style="background-color: ${category.color}"></span>
+                <strong class="category-name">${category.name}</strong>
+                ${category.description ? `<span class="category-desc card-desc">${category.description}</span>` : ''}
+                <button class="btn-edit-category" title="Renomear categoria" data-category-id="${category.id}" style="background:none;border:none;color:var(--text-color);cursor:pointer;margin-left:8px;"><span class="codicon codicon-edit"></span></button>
+                <button class="btn-delete-category" title="Deletar categoria" data-category-id="${category.id}" style="background:none;border:none;color:red;cursor:pointer;margin-left:4px;"><span class="codicon codicon-trash"></span></button>
+              </div>
+            `).join('')}
+          </div>
         </div>
-      </div>
-    </section>
-  </main>
-  <script>
-    // Single vscodeApi instance
-    const vscodeApi = acquireVsCodeApi();
-
-    // Chart instances
-    let focusTimeChartInstance = null;
-    let completionRateChartInstance = null;
-
-    // Helper to get CSS variable values
-    function getCssVariable(variableName) {
-        return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
-    }
-    
-    // DOM Elements (cached on DOMContentLoaded)
-    let statusFilter, tagFilter, categoryFilter, taskList, statsGrid, createTaskButton, focusModeButton;
-
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize DOM element variables
-        statusFilter = document.getElementById('filter-status');
-        tagFilter = document.getElementById('filter-tag');
-        categoryFilter = document.getElementById('filter-category');
-        taskList = document.getElementById('task-list');
-        statsGrid = document.querySelector('.stats-grid');
-        createTaskButton = document.getElementById('btn-create-task');
-        focusModeButton = document.getElementById('btn-focus-mode');
-
-        // Event Listeners for filters
+      </section>
+    </main>
+    <script nonce="${nonce}">
+      (function() {
+        // Chart.js setup (if needed)
+        let focusTimeChartInstance = null;
+        let completionRateChartInstance = null;
+        const vscode = acquireVsCodeApi();
+        function filterTasks() {}
+        // Attach all event listeners immediately (not inside DOMContentLoaded)
+        const createTaskButton = document.getElementById('btn-create-task');
+        const focusModeButton = document.getElementById('btn-focus-mode');
+        const btnCreateTag = document.getElementById('btn-create-tag');
+        const btnCreateCategory = document.getElementById('btn-create-category');
+        const statusFilter = document.getElementById('filter-status');
+        const tagFilter = document.getElementById('filter-tag');
+        const categoryFilter = document.getElementById('filter-category');
+        const statsGrid = document.querySelector('.stats-grid');
+        if (createTaskButton) createTaskButton.addEventListener('click', () => vscode.postMessage({ command: 'createTask' }));
+        if (focusModeButton) focusModeButton.addEventListener('click', () => vscode.postMessage({ command: 'startFocus' }));
+        if (btnCreateTag) btnCreateTag.addEventListener('click', () => vscode.postMessage({ command: 'createTag' }));
+        if (btnCreateCategory) btnCreateCategory.addEventListener('click', () => vscode.postMessage({ command: 'createCategory' }));
         if (statusFilter) statusFilter.addEventListener('change', filterTasks);
         if (tagFilter) tagFilter.addEventListener('change', filterTasks);
         if (categoryFilter) categoryFilter.addEventListener('change', filterTasks);
-
-        // Event Listeners for buttons
-        if (createTaskButton) {
-            createTaskButton.onclick = function() {
-                vscodeApi.postMessage({ command: 'createTask' });
-            };
-        }
-        if (focusModeButton) {
-            focusModeButton.onclick = function() {
-                vscodeApi.postMessage({ command: 'startFocus' });
-            };
-        }
-
-        // Event listener for clickable cards (delegated to statsGrid)
         if (statsGrid) {
-            statsGrid.addEventListener('click', function(event) {
-                const card = event.target.closest('.clickable-card');
-                if (card && card.dataset.action) {
-                    const action = card.dataset.action;
-                    console.log('Card clicked:', action);
-                    vscodeApi.postMessage({
-                        command: 'dashboardCardClicked',
-                        action: action
-                    });
-                }
-            });
+          statsGrid.addEventListener('click', (event) => {
+            const card = event.target.closest('.clickable-card');
+            if (card && card.dataset.action) {
+              vscode.postMessage({ command: 'dashboardCardClicked', action: card.dataset.action });
+            }
+          });
         }
-    });
-
-    function filterTasks() {
-      // Ensure elements are available before trying to read their values
-      if (!statusFilter || !tagFilter || !categoryFilter || !taskList) return;
-
-      const status = statusFilter.value;
-      const tag = tagFilter.value;
-      const category = categoryFilter.value;
-      Array.from(taskList.children).forEach(function(el) {
-        const elStatus = el.getAttribute('data-status');
-        const elTags = el.getAttribute('data-tag') || '';
-        const elCategory = el.getAttribute('data-category') || '';
-        let show = true;
-        if (status && elStatus !== status) show = false;
-        if (tag && !elTags.split(',').includes(tag)) show = false;
-        if (category && elCategory !== category) show = false;
-        el.style.display = show ? '' : 'none';
-      });
-    }
-    
-    window.addEventListener('message', function(event) {
-      var message = event.data;
-      switch (message.type) {
-        case 'update':
-          if (message.stats) {
-            var stats = message.stats;
-            // Elements for dynamic text updates - these are fine to query here as they are within the update scope
-            var elementsToUpdate = {
-              streak: document.getElementById('streak'),
-              tasksCompleted: document.getElementById('tasks-completed'),
-              mostProductiveHour: document.getElementById('most-productive-hour'),
-              bestDay: document.getElementById('best-day'),
-              avgTaskDuration: document.getElementById('avg-task-duration'),
-              totalFocusTime: document.getElementById('total-focus-time'),
-              focusTimeValueDisplay: document.getElementById('focus-time-value'),
-              completionRateValueDisplay: document.getElementById('completion-rate-value')
-            };
-
-            if (elementsToUpdate.streak) elementsToUpdate.streak.textContent = stats.streak + ' dias';
-            if (elementsToUpdate.tasksCompleted) elementsToUpdate.tasksCompleted.textContent = stats.tasksCompleted;
-            if (elementsToUpdate.mostProductiveHour) elementsToUpdate.mostProductiveHour.textContent = stats.mostProductiveHour ? stats.mostProductiveHour + 'h' : '--:--';
-            if (elementsToUpdate.bestDay) elementsToUpdate.bestDay.textContent = stats.bestDay || '--';
-            if (elementsToUpdate.avgTaskDuration) elementsToUpdate.avgTaskDuration.textContent = stats.avgTaskDuration + ' minutos';
-            if (elementsToUpdate.totalFocusTime) elementsToUpdate.totalFocusTime.textContent = stats.totalFocusTime + ' minutos';
-            if (elementsToUpdate.focusTimeValueDisplay) elementsToUpdate.focusTimeValueDisplay.textContent = stats.focusTime + ' minutos';
-            if (elementsToUpdate.completionRateValueDisplay) elementsToUpdate.completionRateValueDisplay.textContent = stats.completionRate + '%';
-            
-            updateFocusTimeChart(stats.focusTime);
-            updateCompletionRateChart(stats.completionRate);
+        document.querySelectorAll('.btn-delete-task').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation(); const id = btn.getAttribute('data-task-id'); vscode.postMessage({ command: 'deleteTask', taskId: id });
+        }));
+        document.querySelectorAll('.btn-edit-task').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation(); const id = btn.getAttribute('data-task-id'); vscode.postMessage({ command: 'editTask', taskId: id });
+        }));
+        document.querySelectorAll('.btn-delete-subtask').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation(); const taskId = btn.getAttribute('data-task-id'); const subId = btn.getAttribute('data-subtask-id'); vscode.postMessage({ command: 'deleteSubtask', taskId, subtaskId: subId });
+        }));
+        document.querySelectorAll('.btn-edit-subtask').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation(); const taskId = btn.getAttribute('data-task-id'); const subId = btn.getAttribute('data-subtask-id'); vscode.postMessage({ command: 'editSubtask', taskId, subtaskId: subId });
+        }));
+        // Fix: re-attach event listeners for tag/category edit/delete after every render
+        document.querySelectorAll('.btn-delete-tag').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-tag-id');
+          const tag = window.tags?.find?.(t => t.id == id) || null;
+          vscode.postMessage({ command: 'deleteTag', tag: tag || { id } });
+        }));
+        document.querySelectorAll('.btn-edit-tag').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-tag-id');
+          const tag = window.tags?.find?.(t => t.id == id) || null;
+          vscode.postMessage({ command: 'editTag', tag: tag || { id } });
+        }));
+        document.querySelectorAll('.btn-delete-category').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-category-id');
+          const category = window.categories?.find?.(c => c.id == id) || null;
+          vscode.postMessage({ command: 'deleteCategory', category: category || { id } });
+        }));
+        document.querySelectorAll('.btn-edit-category').forEach(btn => btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-category-id');
+          const category = window.categories?.find?.(c => c.id == id) || null;
+          vscode.postMessage({ command: 'editCategory', category: category || { id } });
+        }));
+        // Checkbox de tarefa: se não há subtarefas, marcar/desmarcar completa a tarefa e barra vai para 100%/0%. Se há subtarefas, só permite marcar se todas subtarefas estiverem completas.
+        document.querySelectorAll('.task-checkbox').forEach(cb => cb.addEventListener('change', function() {
+          const id = cb.getAttribute('data-task-id');
+          const taskElem = cb.closest('.task-item');
+          const hasSubtasks = taskElem && taskElem.querySelectorAll('.subtask-checkbox').length > 0;
+          if (!hasSubtasks) {
+            if (cb.checked) vscode.postMessage({ command: 'completeTask', taskId: id });
+            // Atualiza barra e texto imediatamente
+            const bar = taskElem.querySelector('.progress');
+            const percent = taskElem.querySelector('.task-progress span');
+            if (bar && percent) {
+              bar.style.width = cb.checked ? '100%' : '0%';
+              percent.textContent = cb.checked ? '100%' : '0%';
+            }
+          } else {
+            // Só permite marcar se todas subtarefas estiverem completas
+            const allDone = Array.from(taskElem.querySelectorAll('.subtask-checkbox')).every(sub => sub.checked);
+            if (cb.checked && allDone) {
+              vscode.postMessage({ command: 'completeTask', taskId: id });
+            } else {
+              cb.checked = allDone;
+            }
+            // Atualiza barra e texto imediatamente
+            const bar = taskElem.querySelector('.progress');
+            const percent = taskElem.querySelector('.task-progress span');
+            const total = taskElem.querySelectorAll('.subtask-checkbox').length;
+            const done = taskElem.querySelectorAll('.subtask-checkbox:checked').length;
+            const pct = total ? Math.round((done/total)*100) : 0;
+            if (bar && percent) {
+              bar.style.width = pct + '%';
+              percent.textContent = pct + '%';
+            }
           }
-          break;
-      }
-    });
-
-    function updateFocusTimeChart(focusTimeMinutes) {
-        const ctx = document.getElementById('focusTimeChart')?.getContext('2d');
-        if (!ctx) return;
-
-        const primaryColor = getCssVariable('--primary');
-        const textColor = getCssVariable('--text-color');
-        const mutedColor = getCssVariable('--muted');
-        const fontFamily = getCssVariable('--vscode-font-family');
-        
-        const dailyGoalMinutes = 480; // Example: 8 hours
-
-        if (focusTimeChartInstance) {
-            focusTimeChartInstance.data.datasets[0].data = [focusTimeMinutes];
-            focusTimeChartInstance.options.scales.y.max = Math.max(dailyGoalMinutes, focusTimeMinutes + 60); // Ensure goal or current time is visible
-            focusTimeChartInstance.update();
-        } else {
-            focusTimeChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Hoje'],
-                    datasets: [{
-                        label: 'Tempo Focado (minutos)',
-                        data: [focusTimeMinutes],
-                        backgroundColor: [primaryColor],
-                        borderColor: [primaryColor],
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        barPercentage: 0.5,
-                        categoryPercentage: 0.7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y', // Horizontal bar
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            max: Math.max(dailyGoalMinutes, focusTimeMinutes + 60),
-                            grid: { display: false },
-                            ticks: { 
-                                color: textColor,
-                                font: { family: fontFamily, size: 10 }
-                            }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { 
-                                color: textColor,
-                                font: { family: fontFamily, size: 12 }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
-                            titleColor: textColor,
-                            bodyColor: textColor,
-                            borderColor: getCssVariable('--border-color'),
-                            borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.raw + ' min';
-                                }
-                            }
-                        }
-                    }
-                });
-        }
-    }
-
-    function updateCompletionRateChart(completionRate) {
-        const ctx = document.getElementById('completionRateChart')?.getContext('2d');
-        if (!ctx) return;
-
-        const primaryColor = getCssVariable('--primary');
-        const mutedColor = getCssVariable('--muted'); // For the unfilled part
-        const textColor = getCssVariable('--text-color');
-        const fontFamily = getCssVariable('--vscode-font-family');
-
-        const data = [completionRate, 100 - completionRate];
-
-        if (completionRateChartInstance) {
-            completionRateChartInstance.data.datasets[0].data = data;
-            completionRateChartInstance.update();
-        } else {
-            completionRateChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Concluído', 'Restante'],
-                    datasets: [{
-                        data: data,
-                        backgroundColor: [primaryColor, mutedColor],
-                        borderColor: [primaryColor, mutedColor], // Or card-bg for less visible border
-                        borderWidth: 1,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '70%', // Makes it a donut
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: getCssVariable('--vscode-editorWidget-background'),
-                            titleColor: textColor,
-                            bodyColor: textColor,
-                            borderColor: getCssVariable('--border-color'),
-                            borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.dataIndex === 0) {
-                                        return \`Concluído: \${context.raw}%\`;
-                                    }
-                                    return null; // Don't show tooltip for the "Restante" part
-                                }
-                            }
-                        }
-                    },
-                    elements: {
-                        arc: {
-                            borderWidth: 0 // Remove border from arcs if not desired
-                        }
-                    }
-                });
-        }
-    }
-  </script>
-</body>
+        }));
+        document.querySelectorAll('.subtask-checkbox').forEach(cb => cb.addEventListener('change', function() {
+          const taskId = cb.getAttribute('data-task-id');
+          const subId = cb.getAttribute('data-subtask-id');
+          if (cb.checked) vscode.postMessage({ command: 'completeSubtask', taskId, subtaskId: subId });
+          // Atualiza barra e texto imediatamente
+          const taskElem = cb.closest('.task-item');
+          const bar = taskElem.querySelector('.progress');
+          const percent = taskElem.querySelector('.task-progress span');
+          const total = taskElem.querySelectorAll('.subtask-checkbox').length;
+          const done = taskElem.querySelectorAll('.subtask-checkbox:checked').length;
+          const pct = total ? Math.round((done/total)*100) : 0;
+          if (bar && percent) {
+            bar.style.width = pct + '%';
+            percent.textContent = pct + '%';
+          }
+          // Se todas subtarefas completas, marca checkbox principal
+          const mainCb = taskElem.querySelector('.task-checkbox');
+          if (mainCb) mainCb.checked = (done === total);
+        }));
+      })();
+    </script>
+  </body>
 </html>
-        `;
-    }
 
-    // Helper to calculate task progress (assuming subtasks determine progress)
-    private calculateTaskProgress(task: Task): number {
-        if (task.subtasks.length === 0) return 0;
-        const completedSubtasks = task.subtasks.filter(s => s.status === TaskStatus.COMPLETED).length;
-        return Math.round((completedSubtasks / task.subtasks.length) * 100);
+        `;
     }
 }

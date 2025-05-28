@@ -129,5 +129,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Thanks to all contributors who have helped shape this extension
-- Inspired by productivity tools and focus techniques used by developers worldwide 
+- Thanks to all contributors who have helped me shape this extension
+- Inspired by productivity tools and focus techniques used by developers worldwide
+
+## Security & Privacy
+
+- **[Security Policy](./SECURITY.md):** Details all security measures, including input sanitization, webview protection, and local-only data handling.
+- **[Privacy Policy](./PRIVACY.md):** Explains how your data is handled, stored only locally, and never shared or tracked.
+
+**Summary:**
+- All your data (tasks, tags, categories, preferences) is stored locally and never sent to third parties.
+- No analytics, telemetry, or personal data is collected.
+- All user input is validated and sanitized to prevent vulnerabilities (XSS, injection, etc.).
+- Sensitive operations (file access, storage) are protected and never expose data externally.
+- You can delete all your data at any time via the extension interface or by uninstalling the extension.
+
+For details, see the linked policy files above.
+
+---

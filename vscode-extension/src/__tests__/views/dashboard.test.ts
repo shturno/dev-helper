@@ -75,8 +75,9 @@ describe('DashboardView', () => {
 
         mockHyperfocusManager = {
             isActive: false,
-            startHyperfocus: jest.fn(),
-            stopHyperfocus: jest.fn(),
+            // Corrected: Use activateHyperfocus and deactivateHyperfocus in mock
+            activateHyperfocus: jest.fn(),
+            deactivateHyperfocus: jest.fn(),
             getStats: jest.fn().mockReturnValue({
                 todayMinutes: 60,
                 totalMinutes: 120,
@@ -303,7 +304,8 @@ describe('DashboardView', () => {
     });
 
     describe('message handling', () => {
-        it('should handle startFocus message', async () => {
+        it('should handle startFocus message when hyperfocus is inactive', async () => {
+            mockHyperfocusManager.isActive = false;
             dashboardView.resolveWebviewView(
                 mockWebviewView,
                 {} as vscode.WebviewViewResolveContext,
@@ -313,7 +315,25 @@ describe('DashboardView', () => {
             const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as jest.Mock).mock.calls[0][0];
             await messageHandler({ command: 'startFocus' });
 
-            expect(mockHyperfocusManager.startHyperfocus).toHaveBeenCalled();
+            // Corrected: Expect activateHyperfocus to be called
+            expect(mockHyperfocusManager.activateHyperfocus).toHaveBeenCalledWith({ reason: 'manual' });
+            expect(mockHyperfocusManager.deactivateHyperfocus).not.toHaveBeenCalled();
+        });
+
+        it('should handle startFocus message when hyperfocus is active', async () => {
+            mockHyperfocusManager.isActive = true;
+            dashboardView.resolveWebviewView(
+                mockWebviewView,
+                {} as vscode.WebviewViewResolveContext,
+                {} as vscode.CancellationToken
+            );
+
+            const messageHandler = (mockWebviewView.webview.onDidReceiveMessage as jest.Mock).mock.calls[0][0];
+            await messageHandler({ command: 'startFocus' });
+
+            // Corrected: Expect deactivateHyperfocus to be called
+            expect(mockHyperfocusManager.deactivateHyperfocus).toHaveBeenCalled();
+            expect(mockHyperfocusManager.activateHyperfocus).not.toHaveBeenCalled();
         });
 
         it('should handle createTask message', async () => {
@@ -329,4 +349,4 @@ describe('DashboardView', () => {
             expect(mockTaskTracker.createTask).toHaveBeenCalled();
         });
     });
-}); 
+});

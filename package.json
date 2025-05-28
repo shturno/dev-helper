@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "devDependencies": {
-    "@storybook/addon-interactions": "^8.6.14"
+    "@storybook/addon-interactions": "^8.6.14",
+    "typescript": "^5.8.3"
   }
 }

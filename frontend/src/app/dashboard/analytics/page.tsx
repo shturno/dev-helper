@@ -191,5 +191,36 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle>Distribuição de Tarefas</CardTitle>
                   <CardDescription>
-                    Distribuição de tarefas por categoria\
+                    Distribuição de tarefas por categoria
                   </CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  <div className="flex h-full items-center justify-center rounded-md border border-dashed">
+                    <div className="flex flex-col items-center gap-2">
+                      <BarChart className="h-8 w-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        Gráfico de distribuição de tarefas
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div> {/* fecha grid de cards menores */}
+        </TabsContent>
+        <TabsContent value="tasks" className="space-y-4">
+          {/* Conteúdo da aba Tarefas */}
+          <div className="flex items-center justify-center h-40 text-muted-foreground">Em breve: Relatórios de tarefas</div>
+        </TabsContent>
+        <TabsContent value="focus" className="space-y-4">
+          {/* Conteúdo da aba Tempo em Foco */}
+          <div className="flex items-center justify-center h-40 text-muted-foreground">Em breve: Relatórios de foco</div>
+        </TabsContent>
+        <TabsContent value="progress" className="space-y-4">
+          {/* Conteúdo da aba Progresso */}
+          <div className="flex items-center justify-center h-40 text-muted-foreground">Em breve: Relatórios de progresso</div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

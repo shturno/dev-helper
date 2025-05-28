@@ -238,76 +238,125 @@ export class TaskTracker {
     }
 
     public initialize(): void {
-        // Registrar comando para selecionar tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand(
-                'dev-helper.selectTask',
-                this.selectTask.bind(this)
-            )
-        );
+        // Registrar comando para selecionar tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand(
+                    'dev-helper.selectTask',
+                    this.selectTask.bind(this)
+                )
+            );
+        } catch (error) {
+            // Se o comando já existe, apenas log e continua
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.selectTask já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.selectTask já registrado, ignorando.");
+            }
+        }
 
-        // Registrar comando para criar tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand(
-                'dev-helper.createTask',
-                this.createTask.bind(this)
-            )
-        );
+        // Registrar comando para criar tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand(
+                    'dev-helper.createTask',
+                    this.createTask.bind(this)
+                )
+            );
+        } catch (error) {
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.createTask já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.createTask já registrado, ignorando.");
+            }
+        }
 
-        // Registrar comando para mostrar detalhes da tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand(
-                'dev-helper.showTaskDetails',
-                this.showTaskDetails.bind(this)
-            )
-        );
+        // Registrar comando para mostrar detalhes da tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand(
+                    'dev-helper.showTaskDetails',
+                    this.showTaskDetails.bind(this)
+                )
+            );
+        } catch (error) {
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.showTaskDetails já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.showTaskDetails já registrado, ignorando.");
+            }
+        }
 
-        // Registrar comando para decompor tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand(
-                'dev-helper.decomposeTask',
-                this.decomposeCurrentTask.bind(this)
-            )
-        );
+        // Registrar comando para decompor tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand(
+                    'dev-helper.decomposeTask',
+                    this.decomposeCurrentTask.bind(this)
+                )
+            );
+        } catch (error) {
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.decomposeTask já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.decomposeTask já registrado, ignorando.");
+            }
+        }
 
-        // Registrar comando para adicionar tag à tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand('dev-helper.addTagToTask', async (task: Task) => {
-                const tags = this.tagManager.getTags();
-                const selectedTags = await vscode.window.showQuickPick(
-                    tags.map(t => ({ label: t.name, value: t })),
-                    {
-                        placeHolder: 'Selecione as tags para adicionar',
-                        canPickMany: true
+        // Registrar comando para adicionar tag à tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand('dev-helper.addTagToTask', async (task: Task) => {
+                    const tags = this.tagManager.getTags();
+                    const selectedTags = await vscode.window.showQuickPick(
+                        tags.map(t => ({ label: t.name, value: t })),
+                        {
+                            placeHolder: 'Selecione as tags para adicionar',
+                            canPickMany: true
+                        }
+                    );
+
+                    if (selectedTags) {
+                        task.tags = selectedTags.map(t => t.value);
+                        await this.saveTasks();
+                        this.showTaskDetails();
                     }
-                );
+                })
+            );
+        } catch (error) {
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.addTagToTask já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.addTagToTask já registrado, ignorando.");
+            }
+        }
 
-                if (selectedTags) {
-                    task.tags = selectedTags.map(t => t.value);
-                    await this.saveTasks();
-                    this.showTaskDetails();
-                }
-            })
-        );
+        // Registrar comando para definir categoria da tarefa - com proteção contra registro duplicado
+        try {
+            this.disposables.push(
+                vscode.commands.registerCommand('dev-helper.setTaskCategory', async (task: Task) => {
+                    const categories = this.tagManager.getCategories();
+                    const selectedCategory = await vscode.window.showQuickPick(
+                        categories.map(c => ({ label: c.name, value: c })),
+                        {
+                            placeHolder: 'Selecione a categoria da tarefa'
+                        }
+                    );
 
-        // Registrar comando para definir categoria da tarefa
-        this.disposables.push(
-            vscode.commands.registerCommand('dev-helper.setTaskCategory', async (task: Task) => {
-                const categories = this.tagManager.getCategories();
-                const selectedCategory = await vscode.window.showQuickPick(
-                    categories.map(c => ({ label: c.name, value: c })),
-                    {
-                        placeHolder: 'Selecione a categoria da tarefa'
+                    if (selectedCategory) {
+                        task.category = selectedCategory.value;
+                        await this.saveTasks();
+                        this.showTaskDetails();
                     }
-                );
-
-                if (selectedCategory) {
-                    task.category = selectedCategory.value;
-                    await this.saveTasks();
-                    this.showTaskDetails();
-                }
-            })
-        );
+                })
+            );
+        } catch (error) {
+            if (error instanceof Error) {
+                console.log(`Comando dev-helper.setTaskCategory já registrado, ignorando: ${error.message}`);
+            } else {
+                console.log("Comando dev-helper.setTaskCategory já registrado, ignorando.");
+            }
+        }
 
         // Exibir status bar
         this.statusBarItem.show();
@@ -957,6 +1006,55 @@ export class TaskTracker {
         this.tasks = newTasks;
         await this.saveTasks();
         this.updateDashboard();
+    }
+
+    public async deleteTask(taskId: number): Promise<void> {
+        const index = this.tasks.findIndex(t => t.id === taskId);
+        if (index !== -1) {
+            this.tasks.splice(index, 1);
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    public async deleteSubtask(taskId: number, subtaskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (task) {
+            task.subtasks = task.subtasks.filter(s => s.id !== subtaskId);
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    /**
+     * Rename an existing task
+     */
+    public async editTask(taskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        const newTitle = await vscode.window.showInputBox({ prompt: 'Novo título da tarefa', value: task.title });
+        if (newTitle) {
+            task.title = sanitizeHtml(newTitle);
+            task.updatedAt = new Date();
+            await this.saveTasks();
+            this.updateDashboard();
+        }
+    }
+
+    /**
+     * Rename an existing subtask
+     */
+    public async editSubtask(taskId: number, subtaskId: number): Promise<void> {
+        const task = this.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        const sub = task.subtasks.find(s => s.id === subtaskId);
+        if (!sub) return;
+        const newTitle = await vscode.window.showInputBox({ prompt: 'Novo título da subtarefa', value: sub.title });
+        if (newTitle) {
+            sub.title = sanitizeHtml(newTitle);
+            await this.saveTasks();
+            this.updateDashboard();
+        }
     }
 
     private startUrgentTaskChecker(): void {
