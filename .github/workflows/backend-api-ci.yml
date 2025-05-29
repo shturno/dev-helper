@@ -1,0 +1,44 @@
+name: Backend API CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  laravel-tests:
+    runs-on: ubuntu-latest
+    services:
+      sqlite:
+        image: nouchka/sqlite3:latest
+        ports:
+          - 3306:3306
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, sqlite3, pdo, pdo_sqlite
+          coverage: none
+      - name: Install Composer dependencies
+        run: |
+          cd backend-api
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+      - name: Copy .env
+        run: |
+          cd backend-api
+          cp .env.example .env || true
+      - name: Generate app key
+        run: |
+          cd backend-api
+          php artisan key:generate
+      - name: Run migrations
+        run: |
+          cd backend-api
+          php artisan migrate --env=testing --force
+      - name: Run tests
+        run: |
+          cd backend-api
+          php artisan test --testsuite=Feature
